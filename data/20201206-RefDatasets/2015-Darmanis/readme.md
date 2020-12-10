@@ -1,4 +1,4 @@
-A survey of human brain transcriptome diversity at the single cell level
+A survey of human brain transcriptome diversity at the single cell level.
 Darmanis et al
 [PNAS, 2015](https://www.pnas.org/content/112/23/7285)
 ([Supp](http://www.pnas.org/lookup/suppl/doi:10.1073/pnas.1507125112/-/DCSupplemental/pnas.1507125112.sapp.pdf)).
