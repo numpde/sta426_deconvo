@@ -7,8 +7,12 @@ of deconvolution by NNLS.
 Reference dataset: Darmanis et al (2015).
 """
 
+import pandas as pd
+
 from pathlib import Path
+
 from tcga.utils import mkdir
+
 from datasource import fgcz, darm, normalize, norm1, darm_celltypes as celltypes
 from nnls import nnls
 
@@ -19,7 +23,7 @@ darm = normalize(darm)
 fgcz = normalize(fgcz)
 
 # Deconvolution
-deco = nnls(bulk=fgcz, scref=darm)
+deco = pd.DataFrame({n: nnls(bulk=b, scref=darm) for (n, b) in fgcz.iteritems()})
 
 # Cell type proportions
 deco = norm1(deco)
