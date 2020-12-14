@@ -15,18 +15,12 @@ from progressbar import progressbar
 from datasource import norm1
 from tcga.utils import unlist1, mkdir
 
-from a_deconvolution3 import scref
+from a_deconvolution3 import scref, qc
 from nnls import deco3, corners
 
 out_dir = mkdir(Path(__file__).with_suffix(""))
 
 full = unlist1(scref(frac=1))
-
-
-def qc(reco_prop):
-    explained_fraction = sum(reco_prop)
-    mode = max(reco_prop)
-    return (explained_fraction > 0.9 > mode)
 
 
 def experiment(i):

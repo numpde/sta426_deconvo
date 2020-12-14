@@ -28,7 +28,7 @@ fgcz = normalize(fgcz)
 darm.columns = [(i if i in ['astrocytes', 'neurons', 'others'] else 'others') for i in darm.columns]
 
 
-def scref(frac=0.3, repeats=1000, rs=np.random.RandomState(9)):
+def scref(frac=0.3, repeats=1000, rs=np.random.RandomState(43)):
     if (frac == 1):
         yield darm
     else:
@@ -36,12 +36,17 @@ def scref(frac=0.3, repeats=1000, rs=np.random.RandomState(9)):
             yield darm.sample(frac=frac, random_state=rs, axis=1)
 
 
-if __name__ == '__main__':
+def qc(reco_prop):
+    explained_fraction = sum(reco_prop)
+    mode = max(reco_prop)
+    return (explained_fraction > 0.5) and (mode < 0.9)
 
+
+def main():
     for (n, (kind, df)) in enumerate(fgcz.groupby(fgcz_meta.Condition, axis=1)):
         for (sample_id, sample) in progressbar(list(df.iteritems())):
             for frac in [0.3, 0.5, 0.8]:
-                with deco3(bulk=sample, scref=scref(frac)) as px:
+                with deco3(bulk=sample, scref=scref(frac), qc=qc) as px:
                     name = "_".join(map(str, [
                         sample_id,
                         fgcz_meta.Condition[sample_id],
@@ -51,3 +56,7 @@ if __name__ == '__main__':
                     ]))
 
                     px.f.savefig((mkdir(out_dir / F"frac={frac}") / name).with_suffix(".png"))
+
+
+if __name__ == '__main__':
+    main()

@@ -42,7 +42,7 @@ corners = np.array([[0, 0], [1, 0], [0.5, 1]])
 @contextlib.contextmanager
 def deco3(bulk: pd.Series, scref: typing.Iterable[pd.DataFrame], qc=None) -> Plox:
     with Plox() as px:
-        f = First(nnls(bulk=bulk)).then(lambda s: s.groupby(level=0).sum().sort_index().squeeze())
+        f = First(nnls(bulk=bulk)).then(lambda s: s.groupby(s.index).sum().sort_index().squeeze())
 
         mm = pd.DataFrame(
             data={
