@@ -82,4 +82,4 @@ def norm1(df) -> pd.DataFrame:
     return df / df.sum(axis=0)
 
 
-normalize = First(norm1).then(subset_to_markers).then(drop_zero_cols)
+normalize = First(drop_zero_cols).then(norm1).then(subset_to_markers).then(drop_zero_cols)
