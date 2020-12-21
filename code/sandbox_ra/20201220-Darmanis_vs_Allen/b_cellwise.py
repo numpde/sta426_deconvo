@@ -40,8 +40,8 @@ style = {
     'axes.labelsize': "large",
 
     'xtick.labelsize': "small",
-    'axes.spines.bottom': True,
 
+    'axes.spines.bottom': False,
     'axes.spines.left': False,
     'axes.spines.right': False,
     'axes.spines.top': False,
@@ -88,8 +88,9 @@ for (celltype, (m, expr)) in zip(progressbar(darm_meta['cell type'][darm.columns
                     px.a.plot(xx[xx <= 0.11], yy[xx <= 0.11], s, c=c, alpha=a, lw=lw)
                     px.a.set_ylim(*ylim)
 
-        px.a.set_xlabel("Similarity")
+        # px.a.set_xlabel("Similarity")
         px.a.legend(loc="upper right")
+        px.a.axis('off')
         px.a.set_xticks([])
         px.a.set_yticks([])
 
