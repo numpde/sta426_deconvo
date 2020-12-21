@@ -14,7 +14,6 @@ time = datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S")
 this = Path(__file__)
 find = First(datapath.glob).then(unlist1).then(relpath)
 
-
 preambulations = F"""
 We compare the scRNA expression from
 Darmanis et al [[1]]({find("**/2015-Darmanis")})
