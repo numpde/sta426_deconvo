@@ -25,7 +25,7 @@ from tcga.utils import mkdir
 out_dir = mkdir(Path(__file__).with_suffix(''))
 
 # Compute library size for each sample
-with download(URLS['expr']).now.open() as fd:
+with download(URLS['expr']).time.open() as fd:
     libsize = pd.Series(
         data=pd.concat(
             df.sum(axis=1)
@@ -37,7 +37,7 @@ with download(URLS['expr']).now.open() as fd:
     )
 
 # Compile a reduced meta table
-with download(URLS['meta']).now.open() as fd:
+with download(URLS['meta']).time.open() as fd:
     df_meta = pd.read_csv(fd, sep=',', index_col=0)
     assert (df_meta.shape == (len(df_meta), 38))
 
@@ -58,17 +58,17 @@ with download(URLS['meta']).now.open() as fd:
 
     with redirect_stdout((out_dir / "meta_readme.txt").open(mode='w')):
         print("Source:    ", URLS['meta'])
-        print("Local copy:", download(URLS['meta']).now.local_file.name)
+        print("Local copy:", download(URLS['meta']).time.local_file.name)
         print("Datetime:  ", datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S"))
         print("Script:    ", Path(__file__).name)
 
 # Subset sample expression to marker genes
-with download(URLS['expr']).now.open() as fd:
+with download(URLS['expr']).time.open() as fd:
     df_expr = pd.read_csv(fd, sep=',', index_col=0, usecols=['sample_name', *sorted(markers)])
     df_expr.to_csv(out_dir / "data.csv.gz", sep='\t', compression='gzip')
 
     with redirect_stdout((out_dir / "data_readme.txt").open(mode='w')):
         print("Source:    ", URLS['data'])
-        print("Local copy:", download(URLS['data']).now.local_file.name)
+        print("Local copy:", download(URLS['data']).time.local_file.name)
         print("Datetime:  ", datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S"))
         print("Script:    ", Path(__file__).name)

@@ -30,14 +30,14 @@ URLS = {
 }
 
 for url in URLS.values():
-    data = download(url).now
+    data = download(url).time
     print(data.meta)
 
 import tarfile
 import pandas as pd
 
 # How to load all samples
-with download(URLS['GSE124439']).now.open(mode='rb') as fd:
+with download(URLS['GSE124439']).time.open(mode='rb') as fd:
     with tarfile.TarFile(fileobj=fd, mode='r') as tar:
         df = pd.concat(
             axis=1,

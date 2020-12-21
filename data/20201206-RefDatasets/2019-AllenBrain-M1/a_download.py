@@ -37,7 +37,7 @@ URLS = {
 download = download.to(abs_path=Path(__file__).with_suffix(''))
 
 for (k, url) in URLS.items():
-    (download(url).now.meta)
+    (download(url).time.meta)
 
 # with download(URLS['expr']).now.open() as fd:
 #     df_expr_index = pd.read_csv(fd, sep=',', usecols=[0], index_col=0).index
@@ -47,11 +47,11 @@ for (k, url) in URLS.items():
 #     df_meta_index = pd.read_csv(fd, sep=',', index_col=0).index
 #     assert (df_expr_index.equals(df_meta_index[0:len(df_expr_index)]))
 
-with download(URLS['expr']).now.open() as fd:
+with download(URLS['expr']).time.open() as fd:
     df_expr = pd.read_csv(fd, sep=',', nrows=10, index_col=0).astype(int)
     assert (df_expr.shape == (len(df_expr), 50281))
 
-with download(URLS['meta']).now.open() as fd:
+with download(URLS['meta']).time.open() as fd:
     df_meta = pd.read_csv(fd, sep=',', index_col=0)
     assert (df_meta.shape == (len(df_meta), 38))
 

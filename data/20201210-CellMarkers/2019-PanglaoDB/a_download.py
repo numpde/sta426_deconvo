@@ -18,7 +18,7 @@ from pathlib import Path
 from tcga.utils import download
 
 download = download.to(abs_path=Path(__file__).with_suffix(''))
-data = download(URL).now
+data = download(URL).time
 
 print(data.meta)
 
