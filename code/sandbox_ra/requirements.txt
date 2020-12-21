@@ -1,0 +1,25 @@
+cycler==0.10.0
+joblib==0.17.0
+kiwisolver==1.3.1
+matplotlib==3.3.3
+matplotlib-venn==0.11.6
+numpy==1.19.4
+pandas==1.1.4
+patsy==0.5.1
+Pillow==8.0.1
+plox==0.0.2
+progressbar2==3.53.1
+pyparsing==2.4.7
+python-dateutil==2.8.1
+python-utils==2.4.0
+pytz==2020.4
+scikit-learn==0.23.2
+scipy==1.5.4
+six==1.15.0
+sklearn==0.0
+statsmodels==0.12.1
+tabulate==0.8.7
+tcga==0.0.16
+threadpoolctl==2.1.0
+twig @ git+https://github.com/numpde/twig.git@64d2b52a3c427560b636423f183ba76e690cbce7
+xmltodict==0.12.0
