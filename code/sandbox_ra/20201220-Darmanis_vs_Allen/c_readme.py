@@ -16,7 +16,6 @@ find = First(datapath.glob).then(unlist1).then(relpath)
 
 
 preambulations = F"""
-
 We compare the scRNA expression from
 Darmanis et al [[1]]({find("**/2015-Darmanis")})
 with that from
@@ -68,7 +67,7 @@ marker area is the same across cell types.
 The intensity of the color is proportional
 to the similarity.
 """
-with redirect_stdout((Path(__file__).parent / "readme.md").open('w')):
+with redirect_stdout((this.parent / "readme.md").open('w')):
     print(preambulations)
     print("")
 
