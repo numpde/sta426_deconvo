@@ -19,7 +19,7 @@ six==1.15.0
 sklearn==0.0
 statsmodels==0.12.1
 tabulate==0.8.7
-tcga==0.0.16
+tcga @ git+https://github.com/numpde/tcga@5545e56012b76e398a80870904bc981d6802feed
 threadpoolctl==2.1.0
 twig @ git+https://github.com/numpde/twig.git@64d2b52a3c427560b636423f183ba76e690cbce7
 xmltodict==0.12.0
