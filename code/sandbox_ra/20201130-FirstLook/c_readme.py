@@ -36,10 +36,13 @@ with redirect_stdout((this.parent / "readme.md").open('w')):
     print("### Histograms by condition")
     print()
 
+    def img(x):
+        return F"![<img src='{x}' width='480px'/>]({x})"
+
     for x in f("hist*.png"):
         log.info(x)
         print(F"#### {str(x.stem).split('_')[2]}")
-        print(F"![{x.stem}]({x})")
+        print(img(x))
         print()
 
     print("### T-SNE embeddings")
@@ -49,5 +52,5 @@ with redirect_stdout((this.parent / "readme.md").open('w')):
         log.info(x)
         print(F"#### {str(x.stem).split('_')[2]}")
         print()
-        print(F"![{x.stem}]({x})")
+        print(img(x))
         print()
