@@ -21,6 +21,8 @@ as quoted in the title:
 of the cosine similarity measure against
 cells from Allen Brain M1 [[2]]({relpath(unlist1(datapath.glob("**/2019-AllenBrain-M1")))}).
 The similarities above 95% quantile have been removed.
+The thickness of the line scales with 
+the average similarity (before removal). 
 
 - The figure on the right shows the association
 of the cell with the cells from Allen Brain M1
