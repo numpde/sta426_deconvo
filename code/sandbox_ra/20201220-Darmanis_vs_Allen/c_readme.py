@@ -17,7 +17,7 @@ find = First(datapath.glob).then(unlist1).then(relpath)
 
 preambulations = F"""
 
-Here we compare the scRNA expression from
+We compare the scRNA expression from
 Darmanis et al [[1]]({find("**/2015-Darmanis")})
 with that from
 Allen Brain M1 [[2]]({find("**/2019-AllenBrain-M1")}).
@@ -52,17 +52,21 @@ the 95% quantile is taken instead of the first average.
 ### Correspondence by individual cell
 
 For each cell from [1],
-as quoted in the title:
+as quoted in the subtitle:
 
-- The figure on the left shows the distribution
+- The first figure shows the distribution
 of the cosine similarity measure against cells from [2]. 
 The similarities above 95% quantile have been removed.
 The thickness of the line scales with 
 the average similarity (before removal). 
 
-- The figure on the right shows the association
-of the cell with the cells from Allen Brain M1
-on the t-SNE plot by the same similarity measure.
+- The second figure shows a t-SNE plot 
+of the cells from [2] colored by their type
+(the empty circles indicate the barycenters).
+The size of the dots is such that the total
+marker area is the same across cell types.
+The intensity of the color is proportional
+to the similarity.
 """
 with redirect_stdout((Path(__file__).parent / "readme.md").open('w')):
     print(preambulations)
@@ -77,7 +81,7 @@ with redirect_stdout((Path(__file__).parent / "readme.md").open('w')):
 
             log.info(F"{i} ({t})")
 
-            print(F"{i} ({t})")
+            print(F"#### {i} ({t})")
             print("")
             print(F"![{hist.stem}]({hist})")
             print(F"![{tsne.stem}]({tsne})")
