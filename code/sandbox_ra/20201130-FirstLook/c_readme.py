@@ -37,7 +37,8 @@ with redirect_stdout((this.parent / "readme.md").open('w')):
     print()
 
     def img(x):
-        return F"![<img src='{x}' width='480px'/>]({x})"
+        #return F"![<img src='{x}' width='480px'/>]({x})"
+        return F"<img src='{x}' width='480px'/>"
 
     for x in f("hist*.png"):
         log.info(x)
