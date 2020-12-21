@@ -67,6 +67,7 @@ marker area is the same across cell types.
 The intensity of the color is proportional
 to the similarity.
 """
+
 with redirect_stdout((this.parent / "readme.md").open('w')):
     print(preambulations)
     print("")
