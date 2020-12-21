@@ -6,6 +6,7 @@ Exploratory analysis of the FGCZ dataset.
 RA, 2020-11-30
 """
 
+
 from collections import Counter
 
 import pandas as pd
@@ -14,6 +15,10 @@ from pathlib import Path
 from plox import Plox
 from collections import OrderedDict
 from tcga.utils import mkdir, from_iterable
+from twig import log
+
+DO_TSNE = True
+DO_HIST = True
 
 rs = np.random.RandomState(seed=0)
 
@@ -41,8 +46,8 @@ fgcz_meta = list(data_root.glob("*FGCZ/*_infos.tsv")).pop()
 fgcz_data = pd.read_csv(fgcz_data, sep='\t')
 fgcz_meta = pd.read_csv(fgcz_meta, sep='\t')
 
-print("Sample condition:", dict(Counter(fgcz_meta.Condition)))
-print("Sample source:", dict(Counter(fgcz_meta.Source)))
+log.info(F"Sample condition: {dict(Counter(fgcz_meta.Condition))}")
+log.info(F"Sample source: {dict(Counter(fgcz_meta.Source))}")
 
 assert fgcz_data["Feature ID"].is_unique
 
@@ -58,25 +63,42 @@ X = pd.DataFrame(
     data=TSNE(random_state=rs).fit_transform(df[df.index.isin(markers)].T),
 )
 
-# Round the age column
+# Binarize numerical columns
+fgcz_meta.RIN = pd.cut(fgcz_meta.RIN, [0, 2, 4, 6, 8], right=False)
+fgcz_meta.pmDelay = pd.cut(fgcz_meta.pmDelay, [0, 100, 200, 300, 400, 500, 600], right=False)
+fgcz_meta.LibConc_100_800bp = pd.cut(fgcz_meta.LibConc_100_800bp, [0, 50, 100, 150, 200, 250], right=False)
 fgcz_meta.Age = fgcz_meta.Age.apply(lambda x: F"{np.round(x, -1)}s")
+
 fgcz_meta = fgcz_meta.sort_values(by='Age')
 
-style = {'savefig.pad_inches': 0.01}
+if not DO_TSNE:
+    log.info("T-SNE skipped.")
+else:
+    # t-SNE plots
+    for col in ['Condition', 'Gender', 'Age', 'Source']:
+        log.info(F"T-SNE by {col}...")
+        with Plox() as px:
+            markerstyles = ['^', 'v', 'p', 's', 'o']
+            for ((key, df), m) in zip(X.groupby(fgcz_meta[col]), markerstyles):
+                px.a.plot(df.x, df.y, ls='none', label=key, marker=m)
+                px.a.legend()
+            px.a.axis('off')
+            px.f.savefig(out_dir / F"tsne_by_{col}.png")
 
-for col in ['Condition', 'Gender', 'Age', 'Source']:
-    with Plox(style) as px:
-        markerstyles = ['^', 'v', 'p', 's', 'o']
-        for ((key, df), m) in zip(X.groupby(fgcz_meta[col]), markerstyles):
-            px.a.plot(df.x, df.y, ls='none', label=key, marker=m)
+if not DO_HIST:
+    log.info("Histograms skipped.")
+else:
+    # Histograms
+    for col in ['RIN', 'Age', 'Gender', 'pmDelay', 'LibConc_100_800bp', 'Source']:
+        log.info(F"Histogram on {col}...")
+        with Plox() as px:
+            data = OrderedDict(sorted(fgcz_meta[col].groupby(fgcz_meta.Condition)))
+            df = pd.DataFrame(data={
+                label: s.value_counts()
+                for (label, s) in fgcz_meta[col].groupby(fgcz_meta.Condition)
+            })
+            df.plot.bar(ax=px.a, rot=0)
+            px.a.set_yticks([x for x in px.a.get_yticks() if (round(x) == x)])
+            px.a.set_ylim(0, max(px.a.get_ylim()) + 1)
             px.a.legend()
-        px.a.axis('off')
-        px.f.savefig(out_dir / F"tsne_by_{col}.png")
-
-for col in ['Gender', 'Age', 'pmDelay', 'LibConc_100_800bp', 'RIN', 'Source']:
-    with Plox(style) as px:
-        data = OrderedDict(sorted(fgcz_meta[col].groupby(fgcz_meta.Condition)))
-        px.a.hist(data.values(), label=list(data.keys()))
-        px.a.set_xlabel(col)
-        px.a.legend()
-        px.f.savefig(out_dir / F"hist_by_{col}.png")
+            px.f.savefig(out_dir / F"hist_by_{col}.png")
