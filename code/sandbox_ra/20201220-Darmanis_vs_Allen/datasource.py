@@ -4,6 +4,7 @@
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from tcga.utils import unlist1, assert_exists, from_iterable, First
@@ -41,7 +42,7 @@ datasets = {
 darm_meta: pd.DataFrame = datasets['2015-Darmanis']['meta']
 darm: pd.DataFrame = datasets['2015-Darmanis']['data']
 darm.index = darm.index.str.upper()
-darm.columns = darm_meta['cell type']
+# darm.columns = darm_meta['cell type']
 darm = darm.sort_index(axis=1)
 
 # [genes] x [single cells],  preprocessed to a marker set
@@ -49,8 +50,9 @@ abm1_meta: pd.DataFrame = datasets['2019-AllenBrain-M1']['meta']
 abm1: pd.DataFrame = datasets['2019-AllenBrain-M1']['data']
 abm1 = abm1.T if str(abm1.index.name).startswith("sample") else abm1
 abm1.index = pd.Series(name="gene_name", data=abm1.index.str.upper())
-abm1.columns = pd.Index(name="cell type", data=abm1_meta['celltype'][abm1.columns])
+# abm1.columns = pd.Index(name="cell type", data=abm1_meta['celltype'][abm1.columns])
 abm1 = abm1.sort_index()
+# Note: don't sort the columns
 
 assert (141 == len(set(abm1.index)))
 assert (118 == len(set(abm1.index) & set(darm.index)))
@@ -89,9 +91,12 @@ def drop_zero_cols(df) -> pd.DataFrame:
     return df.loc[:, (df.sum(axis=0) > 0)]
 
 
-def norm1(df) -> pd.DataFrame:
+def norm2_col(df: pd.DataFrame):
+    return df * (df * df).sum(axis=0).transform(lambda x: (1 / np.sqrt(x or 1)))
+
+
+def norm1_col(df) -> pd.DataFrame:
     return df / df.sum(axis=0)
 
 
-normalize = First(drop_zero_cols).then(norm1)
-
+normalize = First(drop_zero_cols).then(norm1_col)
