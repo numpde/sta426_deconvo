@@ -5,7 +5,7 @@ import datasource
 
 # Attempt to read the deconvolution results by Bisque
 try:
-    fgcz_deco_by_bisque = datasource.read("code/**/20201222-Bisque/b_*/fgcz_deco_data.csv")
+    fgcz_deco_by_bisque = datasource.read("code/**/20201222-Bisque/b_*/fgcz_darm_data.csv")
     fgcz_deco_by_bisque.columns = fgcz_deco_by_bisque.columns.str.replace('.', '-')
 except:
     twig.log.warning("Deconvolution results by Bisque not found.")
