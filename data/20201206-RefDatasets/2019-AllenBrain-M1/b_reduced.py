@@ -27,6 +27,18 @@ out_dir = mkdir(Path(__file__).with_suffix(''))
 # Save marker genes to file
 pd.Series(sorted(markers), name="markers").to_csv(out_dir / "marker_genes.csv", sep='\t', index=False)
 
+# Subset sample expression to marker genes
+with download(URLS['expr']).now.open() as fd:
+    df_expr = pd.read_csv(fd, sep=',', index_col=0, usecols=['sample_name', *sorted(markers)]).T
+    df_expr.index.name = "gene_name"
+    df_expr.to_csv(out_dir / "data.csv.gz", sep='\t', compression='gzip')
+
+    with redirect_stdout((out_dir / "data_readme.txt").open(mode='w')):
+        print("Source:    ", URLS['expr'])
+        print("Local copy:", download(URLS['expr']).now.local_file.name)
+        print("Datetime:  ", datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S"))
+        print("Script:    ", Path(__file__).name)
+
 # Compute library size for each sample
 with download(URLS['expr']).now.open() as fd:
     libsize = pd.Series(
@@ -49,6 +61,7 @@ with download(URLS['meta']).now.open() as fd:
     ).assign(
         gender=df_meta.donor_sex_label,
         region=df_meta.region_label,
+        donor=df_meta.external_donor_name_label,
         libsize=libsize,
         # Add other useful fields here
     ).astype(
@@ -62,16 +75,5 @@ with download(URLS['meta']).now.open() as fd:
     with redirect_stdout((out_dir / "meta_readme.txt").open(mode='w')):
         print("Source:    ", URLS['meta'])
         print("Local copy:", download(URLS['meta']).now.local_file.name)
-        print("Datetime:  ", datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S"))
-        print("Script:    ", Path(__file__).name)
-
-# Subset sample expression to marker genes
-with download(URLS['expr']).now.open() as fd:
-    df_expr = pd.read_csv(fd, sep=',', index_col=0, usecols=['sample_name', *sorted(markers)])
-    df_expr.to_csv(out_dir / "data.csv.gz", sep='\t', compression='gzip')
-
-    with redirect_stdout((out_dir / "data_readme.txt").open(mode='w')):
-        print("Source:    ", URLS['data'])
-        print("Local copy:", download(URLS['data']).now.local_file.name)
         print("Datetime:  ", datetime.now(tz=timezone.utc).strftime("%Z-%Y%m%d-%H%M%S"))
         print("Script:    ", Path(__file__).name)

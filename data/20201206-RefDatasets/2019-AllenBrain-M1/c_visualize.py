@@ -21,15 +21,12 @@ def tsne(df, out_csv: Path):
         assert (X.index.name == "sample_name")
         assert (list(X.columns) == ['x', 'y'])
     else:
-        try:
-            X = pd.read_csv(out_csv.with_suffix(''), sep='\t', index_col=0)
-        except FileNotFoundError:
-            X = pd.DataFrame(
-                index=df.columns,
-                columns=['x', 'y'],
-                data=TSNE(random_state=seed).fit_transform(df.T),
-            )
-
+        assert (df.index.name == "gene_name")
+        X = pd.DataFrame(
+            index=pd.Series(df.columns, name="sample_name"),
+            columns=['x', 'y'],
+            data=TSNE(random_state=seed).fit_transform(df.T),
+        )
         X.to_csv(out_csv, sep='\t', compression="gzip")
 
     # https://matplotlib.org/tutorials/introductory/customizing.html
@@ -51,7 +48,7 @@ def main():
     datapath = Path(__file__).parent / "b_reduced"
     read_csv = (lambda f: pd.read_csv(assert_exists(f), sep='\t', index_col=0))
 
-    data = read_csv(datapath / "data.csv.gz").T
+    data = read_csv(datapath / "data.csv.gz")
     meta = read_csv(datapath / "meta.csv.gz")
 
     # Normalize
