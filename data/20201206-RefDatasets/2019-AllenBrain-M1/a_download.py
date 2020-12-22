@@ -34,10 +34,11 @@ URLS = {
     'meta': "https://idk-etl-prod-download-bucket.s3.amazonaws.com/aibs_human_m1_10x/metadata.csv",
 }
 
-download = download.to(abs_path=Path(__file__).with_suffix(''))
+out_dir = Path(__file__).with_suffix('')
+download = download.to(abs_path=out_dir)
 
 for (k, url) in URLS.items():
-    (download(url).time.meta)
+    (download(url).now.meta)
 
 # with download(URLS['expr']).now.open() as fd:
 #     df_expr_index = pd.read_csv(fd, sep=',', usecols=[0], index_col=0).index
@@ -47,11 +48,11 @@ for (k, url) in URLS.items():
 #     df_meta_index = pd.read_csv(fd, sep=',', index_col=0).index
 #     assert (df_expr_index.equals(df_meta_index[0:len(df_expr_index)]))
 
-with download(URLS['expr']).time.open() as fd:
+with download(URLS['expr']).now.open() as fd:
     df_expr = pd.read_csv(fd, sep=',', nrows=10, index_col=0).astype(int)
     assert (df_expr.shape == (len(df_expr), 50281))
 
-with download(URLS['meta']).time.open() as fd:
+with download(URLS['meta']).now.open() as fd:
     df_meta = pd.read_csv(fd, sep=',', index_col=0)
     assert (df_meta.shape == (len(df_meta), 38))
 
@@ -154,4 +155,3 @@ assert all(df_meta.cluster_label[df_meta.class_label == "GABAergic"].str.slice(s
 # Inh L1 SST P4HA3           38
 # Inh L5-6 SST DNAJC14       35
 
-# TODO: save a reduced dataset?

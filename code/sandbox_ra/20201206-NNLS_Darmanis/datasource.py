@@ -7,21 +7,21 @@ from pathlib import Path
 from tcga.utils import unlist1, assert_exists, from_iterable, First
 
 # Data folder
-datapath = (Path(__file__).parent.parent.parent.parent / "data").resolve()
+datapath = Path(__file__).parent.parent.parent.parent.resolve()
 assert datapath.is_dir()
 
-# Data reader
-read_csv = (lambda f: pd.read_csv(assert_exists(f), sep='\t', index_col=0))
+# CSV reader
+read = First(datapath.glob).then(unlist1).then(lambda f: pd.read_csv(f, sep='\t', index_col=0))
 
-# Read all data
+# Read data
 datasets = {
     '2020-FGCZ': {
-        'data': read_csv(unlist1(datapath.glob("*FGCZ/*.zip"))),
-        'meta': read_csv(unlist1(datapath.glob("*FGCZ/*.tsv"))),
+        'data': read("data/**/20201128-FGCZ/*.zip"),
+        'meta': read("data/**/20201128-FGCZ/*.tsv"),
     },
     '2015-Darmanis': {
-        'data': read_csv(unlist1(datapath.glob("*/*Darmanis/b_*/data.csv.gz"))),
-        'meta': read_csv(unlist1(datapath.glob("*/*Darmanis/b_*/meta.csv.gz"))),
+        'data': read("data/**/2015-Darmanis/b_*/data.csv.gz"),
+        'meta': read("data/**/2015-Darmanis/b_*/meta.csv.gz"),
     },
 }
 
@@ -83,3 +83,8 @@ def norm1(df) -> pd.DataFrame:
 
 
 normalize = First(drop_zero_cols).then(norm1).then(subset_to_markers).then(drop_zero_cols)
+
+
+if __name__ == '__main__':
+    print(fgcz)
+    print(darm)

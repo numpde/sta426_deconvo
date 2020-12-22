@@ -14,7 +14,8 @@ from progressbar import progressbar
 from tcga.utils import mkdir
 
 from datasource import fgcz, darm, normalize, fgcz_meta, darm_celltypes as celltypes
-from nnls import deco3
+from datasource_r import fgcz_deco_by_bisque
+from nnls import deco3, corners
 
 out_dir = mkdir(Path(__file__).with_suffix(""))
 
@@ -25,7 +26,9 @@ darm = normalize(darm)
 fgcz = normalize(fgcz)
 
 # Reduce the number of reference cell types to /three/
-darm.columns = [(i if i in ['astrocytes', 'neurons', 'others'] else 'others') for i in darm.columns]
+collapse = (lambda s: [(i if i in ['astrocytes', 'neurons', 'others'] else 'others') for i in s])
+darm.columns = collapse(darm.columns)
+fgcz_deco_by_bisque = fgcz_deco_by_bisque.groupby(collapse(fgcz_deco_by_bisque.index)).sum()
 
 
 def scref(frac=0.3, repeats=1000, rs=np.random.RandomState(43)):
@@ -47,6 +50,11 @@ def main():
         for (sample_id, sample) in progressbar(list(df.iteritems())):
             for frac in [0.3, 0.5, 0.8]:
                 with deco3(bulk=sample, scref=scref(frac), qc=qc) as px:
+                    if fgcz_deco_by_bisque is not None:
+                        bisque_prop = corners.T @ fgcz_deco_by_bisque[sample_id]
+                        px.a.plot(*bisque_prop, 'o', c="bisque", ms=5)
+                        px.a.plot(*bisque_prop, 'x', c="C0", ms=15)
+
                     name = "_".join(map(str, [
                         sample_id,
                         fgcz_meta.Condition[sample_id],

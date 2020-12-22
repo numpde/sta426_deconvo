@@ -18,7 +18,7 @@ download = download.to(abs_path=path_original)
 
 
 def get_data() -> typing.Iterable[pd.Series]:
-    with download(URL).time.open(mode='rb') as fd:
+    with download(URL).now.open(mode='rb') as fd:
         with tarfile.open(fileobj=fd) as tf:
             for file in tf.getmembers():
                 with tf.extractfile(file) as fd:
@@ -57,5 +57,5 @@ if __name__ == '__main__':
     with open(path_prepared / "data_readme.txt", mode='w') as fd:
         with contextlib.redirect_stdout(fd):
             print("Source:    ", URL)
-            print("Local copy:", download(URL).time.local_file.name)
+            print("Local copy:", download(URL).now.local_file.name)
             print("Datetime:  ", ts)

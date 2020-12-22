@@ -31,27 +31,26 @@ with redirect_stdout((this.parent / "readme.md").open('w')):
     print(preambulations)
     print()
 
+
+    def img(x):
+        log.info(x)
+        print(F"#### {str(x.stem).split('_')[2]}")
+        print()
+        # (F"![<img src='{x}' width='480px'/>]({x})")
+        print(F"<img src='{x}' width='480px'/>")
+        print()
+
+
     f = First((this.parent / "a_exploratory").glob).each(relpath).each(Path).then(sorted)
 
     print("### Histograms by condition")
     print()
 
-    def img(x):
-        #return F"![<img src='{x}' width='480px'/>]({x})"
-        return F"<img src='{x}' width='480px'/>"
-
     for x in f("hist*.png"):
-        log.info(x)
-        print(F"#### {str(x.stem).split('_')[2]}")
-        print(img(x))
-        print()
+        img(x)
 
     print("### T-SNE embeddings")
     print()
 
     for x in f("tsne*.png"):
-        log.info(x)
-        print(F"#### {str(x.stem).split('_')[2]}")
-        print()
-        print(img(x))
-        print()
+        img(x)
