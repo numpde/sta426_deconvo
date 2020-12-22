@@ -25,7 +25,7 @@ from tcga.utils import mkdir
 out_dir = mkdir(Path(__file__).with_suffix(''))
 
 # Save marker genes to file
-pd.Series(sorted(markers)).to_csv(out_dir / "marker_genes.csv")
+pd.Series(sorted(markers)).to_csv(out_dir / "marker_genes.csv", sep='\t')
 
 # Compute library size for each sample
 with download(URLS['expr']).now.open() as fd:
