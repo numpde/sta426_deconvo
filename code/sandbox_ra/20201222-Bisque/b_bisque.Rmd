@@ -1,0 +1,410 @@
+---
+title: "Cell type deconvolution with Bisque"
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "2020-Dec-22"
+output: html_document
+#editor_options:
+#  chunk_output_type: console
+---
+
+
+## Pertinent links
+
+- [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html)
+- [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
+- [Darmanis et al (2015)](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
+- [Allen Brain M1 scRNA](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
+- [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) of "Darmanis" in terms of "Allen Brain M1"
+
+## Setup    
+
+```{r setup, include=TRUE}
+suppressPackageStartupMessages({
+  library(magrittr)
+  library(dplyr)
+  library(ggplot2)
+  library(pheatmap)
+  library(stringr)
+  
+  requireNamespace("readr")
+  
+  # https://vroom.r-lib.org/articles/vroom.html
+  # isntall.packages("vroom")
+  library(vroom)
+  
+  # install.packages("pathlibr")
+  library(pathlibr)
+  
+  # Provides `ExpressionSet` data structure
+  # install.packages("Biobase")
+  library(Biobase)
+  
+  # Deconvolution package
+  # install.packages("BisqueRNA")
+  library(BisqueRNA)
+})
+```
+
+
+
+## Preliminaries
+
+### Paths
+
+```{r}
+out_file <- (function(.) pathlibr::Path$new("./b_output")$join(.)$show)
+dir.create(out_file(""), showWarnings = FALSE)
+```
+
+```{r}
+path_to <- (function(.) Sys.glob(pathlibr::Path$new("../../..")$join(.)$show))
+```
+
+### Row names
+
+```{r}
+# Use first column as index
+by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
+# Use index as new column `name`
+ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+### Reading and writing tab-delimited files
+
+Note: The function `utils::read.delim` is too slow
+to read wide tables.
+
+```{r}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 100)
+from_csv <- (function(.) suppressMessages(vroom(., del = '\t')) %>% by_col1)
+```
+
+A call to `to_csv` should be preceded by
+`ind2col("name for index")`.
+
+```{r}
+to_csv <- (function(., f) vroom_write(., out_file(f), delim = "\t"))
+```
+
+### Plotting
+
+```{r}
+hist_theme <- 
+  theme(axis.text.x = element_text(a = 45, hjust = 1, size = 15)) +
+  theme(axis.text.y = element_text(a = 00, hjust = 1, size = 15))
+```
+
+```{r}
+save_heatmap <-
+  function(., filename) {
+    pheatmap::pheatmap(
+      (.),
+      filename = out_file(filename),
+      cluster_rows = FALSE,
+      cluster_cols = FALSE,
+      fontsize_row = 14,
+      fontsize_col = 10,
+      width = 20, height = 3
+    )
+    return(.)
+  }
+```
+
+
+## Data sources
+
+
+### Define a set of genes as markers
+
+These marker genes 
+[were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
+from the
+[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
+scRNA dataset.
+
+```{r}
+abm1_markergenes <- 
+  path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
+  from_csv %>%
+  rownames
+```
+
+
+### Bulk expression dataset: FGCZ
+
+```{r}
+fgcz_data <- 
+  path_to("data/20201128-FGCZ/*count.zip") %>%
+  unz(., unzip(., list=TRUE)$Name) %>%
+  from_csv %>%
+  # Collapse ENSG IDs by gene_name:
+  dplyr::group_by(gene_name) %>%
+  dplyr::summarise_all(sum) %>%
+  tibble::column_to_rownames("gene_name")
+
+fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
+```
+
+
+### Reference scRNA dataset: Darmanis et al (2015)
+
+```{r}
+darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
+darm_meta <- from_csv(path_to("data/*/2015-Darmanis/b*/meta.csv.gz")) %>%
+  # https://stackoverflow.com/a/55184433
+  set_names(names(.) %>% str_replace("cell type", "celltype"))
+```
+
+Plot cell type counts.
+
+```{r}
+darm_meta$celltype %>%
+  data.frame(x=.) %>%
+  ggplot(aes(x=x)) + 
+  geom_bar(fill = "steelblue") + 
+  ggtitle("Cell types in the 'Darmanis' reference dataset") + 
+  xlab("") + ylab("") + scale_y_log10() +
+  hist_theme
+```
+
+
+Remove certain cell types
+from the scRNA reference dataset.
+
+```{r}
+exclude_celltypes <- c("fetal_quiescent", "fetal_replicating", "hybrid")
+
+darm_meta <- 
+  darm_meta %>%
+  dplyr::filter(!(celltype %in% exclude_celltypes))
+
+darm_data <- 
+  darm_data %>%
+  dplyr::select_if(names(.) %in% rownames(darm_meta))
+  
+stopifnot(285 == nrow(darm_meta))
+stopifnot(285 == ncol(darm_data))
+```
+
+
+### Reference scRNA dataset: Allen Brain M1
+
+```{r}
+abm1_meta <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/meta.csv*"))
+abm1_data <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/data.csv*"))
+```
+
+Some sanity checks.
+
+```{r}
+# Number of single cells
+stopifnot(ncol(abm1_data) > 70000)
+stopifnot(nrow(abm1_meta) > 70000)
+# Number of genes and some examples
+stopifnot(nrow(abm1_data) == 141)
+stopifnot(all(c("PIK3CD", "WNT4", "LDLRAP1") %in% rownames(abm1_data)))
+```
+
+Drop samples with too little expression,
+otherwise Bisque doesn't go through.
+
+```{r}
+abm1_data <- 
+  abm1_data %>%
+  # Keep only genes common with the FGCZ dataset
+  {(.)[rownames(.) %in% rownames(fgcz_data), ]} %>%
+  # Drop zero columns (dplyr variant too slow)
+  {(.)[, colSums(.) != 0]}
+
+abm1_meta <- 
+  abm1_meta %>%
+  dplyr::filter(rownames(.) %in% colnames(abm1_data))
+```
+
+Plot cell type counts.
+
+```{r}
+abm1_meta$celltype %>%
+  data.frame(x=.) %>%
+  ggplot(aes(x=x)) + 
+  geom_bar(fill = "darkred") + 
+  ggtitle("Cell types in the 'Allen Brain M1' reference dataset") +
+  xlab("") + ylab("") + scale_y_log10() +
+  hist_theme
+```
+
+
+## Deconvolution by Bisque
+
+
+### Repackage the data
+
+This section follows the 
+[Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html).
+
+```{r}
+fgcz_eset <- Biobase::ExpressionSet(
+  assayData = as.matrix(fgcz_data)
+)
+```
+
+```{r}
+darm_eset <- Biobase::ExpressionSet(
+  # Expression data
+  assayData = as.matrix(darm_data),
+  # Metadata
+  phenoData = Biobase::AnnotatedDataFrame(
+    data = data.frame(
+      row.names = rownames(darm_meta),
+      cellType = darm_meta$celltype,
+      SubjectName = darm_meta$experiment_sample_name,
+      check.names = FALSE,
+      check.rows = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    varMetadata = data.frame(
+      row.names = c("cellType", "SubjectName"),
+      labelDescription = c("cellType", "SubjectName")
+    )
+  )
+)
+```
+
+```{r}
+abm1_eset <- Biobase::ExpressionSet(
+  # Expression data
+  assayData = as.matrix(abm1_data),
+  # Metadata
+  phenoData = Biobase::AnnotatedDataFrame(
+    data = data.frame(
+      row.names = rownames(abm1_meta),
+      cellType = abm1_meta$celltype,
+      SubjectName = abm1_meta$gender,
+      check.names = FALSE,
+      check.rows = FALSE
+    ),
+    varMetadata = data.frame(
+      row.names = c("cellType", "SubjectName"),
+      labelDescription = c("cellType", "SubjectName")
+    )
+  )
+)
+```
+
+
+### Deconvolution (Darmanis)
+
+#### Bisque
+
+```{r}
+bisque_report <-
+  BisqueRNA::ReferenceBasedDecomposition(
+    # BULK DATA
+    bulk.eset = fgcz_eset,
+    # REFERENCE
+    sc.eset = darm_eset,
+    #
+    use.overlap = FALSE,
+    markers = abm1_markergenes,
+    verbose = FALSE
+  )
+
+# Fields of the Bisque result
+print(as.data.frame(names(bisque_report)))
+```
+
+Cluster bulk samples by composition.
+
+```{r}
+fgcz_darm <- 
+  bisque_report$bulk.props %>%
+  {(.)[, hclust(dist(t(.)))$order]}
+```
+
+Save to disk.
+
+```{r}
+fgcz_darm %>% 
+  as.data.frame %>%
+  ind2col("celltype") %>%
+  to_csv("fgcz_darm_data.csv")
+```
+
+Visualize inferred cell type composition
+by bulk sample.
+
+```{r, results = FALSE}
+fgcz_darm %>% save_heatmap("fgcz_darm_data.png")
+```
+
+![](`r out_file("fgcz_darm_data.png")`)
+
+
+#### Comparison with handmade NNLS
+
+
+```{r}
+fgcz_nnls <- 
+  path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
+  # The first column is not unique
+  # The header contains minuses, e.g. "H-0C083"
+  utils::read.delim(., check.names = F) %>%
+  # https://stackoverflow.com/a/55184433
+  set_names(names(.) %>% str_replace("cell type", "celltype")) %>%
+  # Collapse cell types:
+  dplyr::group_by(celltype) %>%
+  dplyr::summarise_all(sum) %>%
+  by_col1 %>% 
+  # Order columns in the same way:
+  dplyr::relocate(colnames(fgcz_darm))
+```
+
+
+```{r}
+fgcz_nnls %>% 
+  save_heatmap("fgcz_nnls_data.png") %>%
+  as.data.frame %>%
+  ind2col("celltype") %>%
+  to_csv("fgcz_nnls_data.csv")
+```
+
+![](`r out_file("fgcz_nnls_data.png")`)
+
+
+### Deconvolution (Allen Brain M1)
+
+```{r}
+bisque_report <-
+  BisqueRNA::ReferenceBasedDecomposition(
+    # BULK DATA
+    bulk.eset = fgcz_eset,
+    # REFERENCE
+    sc.eset = abm1_eset,
+    #
+    use.overlap = FALSE,
+    markers = abm1_markergenes,
+    verbose = FALSE
+  )
+```
+
+```{r}
+fgcz_abm1 <- 
+  bisque_report$bulk.props %>%
+  as.data.frame %>%
+  # Order columns consistently
+  dplyr::relocate(colnames(fgcz_darm))
+```
+
+Visualize and save to disk.
+
+```{r}
+fgcz_abm1 %>% 
+  save_heatmap("fgcz_abm1_data.png") %>%
+  as.data.frame %>%
+  ind2col("celltype") %>%
+  to_csv("fgcz_abm1_data.csv")
+```
+
+![](`r out_file("fgcz_abm1_data.png")`)
+
+
