@@ -42,15 +42,14 @@ datasets = {
 darm_meta: pd.DataFrame = datasets['2015-Darmanis']['meta']
 darm: pd.DataFrame = datasets['2015-Darmanis']['data']
 darm.index = darm.index.str.upper()
-# darm.columns = darm_meta['cell type']
-darm = darm.sort_index(axis=1)
+darm = darm.sort_index(axis=1)  # why?
 
-# [genes] x [single cells],  preprocessed to a marker set
+# [genes] x [single cells],  preprocessed to a marker gene set
 abm1_meta: pd.DataFrame = datasets['2019-AllenBrain-M1']['meta']
 abm1: pd.DataFrame = datasets['2019-AllenBrain-M1']['data']
-abm1 = abm1.T if str(abm1.index.name).startswith("sample") else abm1
+assert (str(abm1.index.name) in ["sample_name", "gene_name"])
+abm1 = abm1.T if (str(abm1.index.name) == "sample_name") else abm1
 abm1.index = pd.Series(name="gene_name", data=abm1.index.str.upper())
-# abm1.columns = pd.Index(name="cell type", data=abm1_meta['celltype'][abm1.columns])
 abm1 = abm1.sort_index()
 # Note: don't sort the columns
 
