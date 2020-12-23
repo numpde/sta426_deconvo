@@ -1,10 +1,10 @@
 ---
-title: "Cell type deconvolution with Bisque"
+title: "Cell type deconvolution with BisqueRNA"
 author: "RA ([numpde](https://github.com/numpde/))"
 date: "2020-Dec-22"
 output: html_document
-#editor_options:
-#  chunk_output_type: console
+editor_options:
+ chunk_output_type: console
 ---
 
 
@@ -23,7 +23,11 @@ output: html_document
 - [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) 
   of **Darmanis et al** in terms of **Allen Brain M1**
 
-- [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html)
+- Bisque [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
+  [reference](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
+  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R),
+  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)
+
 
 ## Setup    
 
@@ -34,20 +38,21 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(pheatmap)
   library(stringr)
-  
+  library(reshape2)
+
   requireNamespace("readr")
-  
+
   # https://vroom.r-lib.org/articles/vroom.html
   # isntall.packages("vroom")
   library(vroom)
-  
+
   # install.packages("pathlibr")
   library(pathlibr)
-  
+
   # Provides `ExpressionSet` data structure
   # BiocManager::install("Biobase")
   library(Biobase)
-  
+
   # Deconvolution package
   # install.packages("BisqueRNA")
   library(BisqueRNA)
@@ -85,7 +90,7 @@ to read wide tables.
 
 ```{r}
 Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 100)
-from_csv <- (function(.) suppressMessages(vroom(., del = '\t')) %>% by_col1)
+from_csv <- (function(.) suppressMessages(vroom(., del = "\t")) %>% by_col1())
 ```
 
 A call to `to_csv` should be preceded by
@@ -98,23 +103,71 @@ to_csv <- (function(., f) vroom_write(., out_file(f), delim = "\t"))
 ### Plotting
 
 ```{r}
-hist_theme <- 
+# Wide plots (inches)
+WIDTH1 <- 20
+HEIGHT1 <- 3
+```
+
+```{r}
+hist_theme <-
   theme(axis.text.x = element_text(a = 45, hjust = 1, size = 15)) +
   theme(axis.text.y = element_text(a = 00, hjust = 1, size = 15))
 ```
 
 ```{r}
+save_barchart <-
+  function(., filename) {
+    as.data.frame(.) %>%
+      ind2col("celltype") %>%
+      reshape2::melt(id = "celltype",
+                     var = "sample",
+                     value.name = "y") %>%
+      {
+        ggplot(., aes(x = sample, y = y, fill = celltype)) +
+          geom_bar(stat = "identity") +
+          scale_fill_brewer(palette = "Paired") +
+          xlab("Sample") +
+          ylab("") +
+          ylim(0, 1) +
+          theme(
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.x = element_blank(),
+            legend.text = element_text(size = 14),
+            legend.title = element_blank(),
+            #axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.text.x = element_text(
+              a = 90,
+              vjust = 0.5,
+              size = 10,
+            )
+          ) +
+          ggsave(
+            filename = out_file(filename),
+            width = WIDTH1,
+            height = HEIGHT1,
+            device = "png"
+          )
+      }
+    return(.)
+  }
+# fgcz_darm %>% save_barchart("fgcz_darm_data_bars.png")
+```
+
+```{r}
 save_heatmap <-
   function(., filename) {
-    pheatmap::pheatmap(
-      (.),
-      filename = out_file(filename),
-      cluster_rows = FALSE,
-      cluster_cols = FALSE,
-      fontsize_row = 14,
-      fontsize_col = 10,
-      width = 20, height = 3
-    )
+    as.data.frame(.) %>%
+      pheatmap::pheatmap(
+        filename = out_file(filename),
+        cluster_rows = FALSE,
+        cluster_cols = FALSE,
+        fontsize_row = 14,
+        fontsize_col = 10,
+        width = WIDTH1,
+        height = HEIGHT1
+      )
     return(.)
   }
 ```
@@ -123,29 +176,13 @@ save_heatmap <-
 ## Data sources
 
 
-### Define a set of genes as markers
-
-These marker genes 
-[were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
-from the
-[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
-scRNA dataset.
-
-```{r}
-abm1_markergenes <- 
-  path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
-  from_csv %>%
-  rownames
-```
-
-
 ### Bulk expression dataset: FGCZ
 
 ```{r}
-fgcz_data <- 
+fgcz_data <-
   path_to("data/20201128-FGCZ/*count.zip") %>%
-  unz(., unzip(., list=TRUE)$Name) %>%
-  from_csv %>%
+  unz(., unzip(., list = TRUE)$Name) %>%
+  from_csv() %>%
   # Collapse ENSG IDs by gene_name:
   dplyr::group_by(gene_name) %>%
   dplyr::summarise_all(sum) %>%
@@ -168,11 +205,13 @@ Plot cell type counts.
 
 ```{r}
 darm_meta$celltype %>%
-  data.frame(x=.) %>%
-  ggplot(aes(x=x)) + 
-  geom_bar(fill = "steelblue") + 
-  ggtitle("Cell types in the 'Darmanis' reference dataset") + 
-  xlab("") + ylab("") + scale_y_log10() +
+  data.frame(x = .) %>%
+  ggplot(aes(x = x)) +
+  geom_bar(fill = "steelblue") +
+  ggtitle("Cell types in the 'Darmanis' reference dataset") +
+  xlab("") +
+  ylab("") +
+  scale_y_log10() +
   hist_theme
 ```
 
@@ -183,14 +222,14 @@ from the scRNA reference dataset.
 ```{r}
 exclude_celltypes <- c("fetal_quiescent", "fetal_replicating", "hybrid")
 
-darm_meta <- 
+darm_meta <-
   darm_meta %>%
   dplyr::filter(!(celltype %in% exclude_celltypes))
 
-darm_data <- 
+darm_data <-
   darm_data %>%
   dplyr::select_if(names(.) %in% rownames(darm_meta))
-  
+
 stopifnot(285 == nrow(darm_meta))
 stopifnot(285 == ncol(darm_data))
 ```
@@ -218,27 +257,64 @@ Drop samples with too little expression,
 otherwise Bisque doesn't go through.
 
 ```{r}
-abm1_data <- 
+abm1_data <-
   abm1_data %>%
   # Keep only genes common with the FGCZ dataset
-  {(.)[rownames(.) %in% rownames(fgcz_data), ]} %>%
+  {
+    (.)[rownames(.) %in% rownames(fgcz_data), ]
+  } %>%
   # Drop zero columns (dplyr variant too slow)
-  {(.)[, colSums(.) != 0]}
+  {
+    (.)[, colSums(.) != 0]
+  }
 
-abm1_meta <- 
+abm1_meta <-
   abm1_meta %>%
   dplyr::filter(rownames(.) %in% colnames(abm1_data))
+```
+
+
+### Define a set of genes as markers
+
+These marker genes 
+[were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
+from the
+[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
+scRNA dataset.
+Technically, these should be the same as 
+in `abm1_data` before filtering.
+Just in case, we subset them the maximal common subset,
+so that 
+we can reconstruct the unaccounted-for proportion
+of cell types from the Bisque report.
+
+
+```{r}
+abm1_markergenes <-
+  path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
+  from_csv() %>%
+  rownames() %>%
+  {
+    (.)[(.) %in% rownames(fgcz_data)]
+  } %>%
+  {
+    (.)[(.) %in% rownames(abm1_data)]
+  }
+
+stopifnot(117 == length(abm1_markergenes))
 ```
 
 Plot cell type counts.
 
 ```{r}
 abm1_meta$celltype %>%
-  data.frame(x=.) %>%
-  ggplot(aes(x=x)) + 
-  geom_bar(fill = "darkred") + 
+  data.frame(x = .) %>%
+  ggplot(aes(x = x)) +
+  geom_bar(fill = "darkred") +
   ggtitle("Cell types in the 'Allen Brain M1' reference dataset") +
-  xlab("") + ylab("") + scale_y_log10() +
+  xlab("") +
+  ylab("") +
+  scale_y_log10() +
   hist_theme
 ```
 
@@ -253,7 +329,8 @@ This section follows the
 
 ```{r}
 fgcz_eset <- Biobase::ExpressionSet(
-  assayData = as.matrix(fgcz_data)
+  # Subset to marker genes for residual norm computation
+  assayData = as.matrix(fgcz_data[abm1_markergenes, ])
 )
 ```
 
@@ -326,31 +403,46 @@ bisque_report <-
 print(as.data.frame(names(bisque_report)))
 ```
 
+It is not clear
+whether this is correct:
+
+```{r}
+explained_proportions <-
+  1 - (sqrt(bisque_report$rnorm) / sqrt(colSums(fgcz_data[bisque_report$genes.used, ]**2)))
+
+print(explained_proportions)
+```
+
+```{r}
+fgcz_darm <-
+  t(t(bisque_report$bulk.props) * explained_proportions)
+```
+
 Cluster bulk samples by composition.
 
 ```{r}
-fgcz_darm <- 
-  bisque_report$bulk.props %>%
-  {(.)[, hclust(dist(t(.)))$order]}
+fgcz_darm <-
+  fgcz_darm %>% {
+    (.)[, hclust(dist(t(.)))$order]
+  }
 ```
 
-Save to disk.
+Save to disk
+and
+visualize inferred cell type composition
+by bulk sample.
 
-```{r}
-fgcz_darm %>% 
-  as.data.frame %>%
+```{r, results = FALSE}
+fgcz_darm %>%
+  as.data.frame() %>%
+  save_heatmap("fgcz_darm_heat.png") %>%
+  save_barchart("fgcz_darm_bars.png") %>%
   ind2col("celltype") %>%
   to_csv("fgcz_darm_data.csv")
 ```
 
-Visualize inferred cell type composition
-by bulk sample.
-
-```{r, results = FALSE}
-fgcz_darm %>% save_heatmap("fgcz_darm_data.png")
-```
-
-![](`r out_file("fgcz_darm_data.png")`)
+![](`r out_file("fgcz_darm_heat.png")`)
+![](`r out_file("fgcz_darm_bars.png")`)
 
 
 #### Comparison with handmade NNLS
@@ -359,7 +451,7 @@ For the code see
 [here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
 
 ```{r}
-fgcz_nnls <- 
+fgcz_nnls <-
   path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
   # The first column is not unique
   # The header contains minuses, e.g. "H-0C083"
@@ -369,7 +461,7 @@ fgcz_nnls <-
   # Collapse cell types:
   dplyr::group_by(celltype) %>%
   dplyr::summarise_all(sum) %>%
-  by_col1 %>% 
+  by_col1() %>%
   # Order columns in the same way:
   dplyr::relocate(colnames(fgcz_darm))
 ```
@@ -377,14 +469,16 @@ fgcz_nnls <-
 Visualize and save to disk.
 
 ```{r}
-fgcz_nnls %>% 
-  save_heatmap("fgcz_nnls_data.png") %>%
-  as.data.frame %>%
+fgcz_nnls %>%
+  as.data.frame() %>%
+  save_heatmap("fgcz_nnls_heat.png") %>%
+  save_barchart("fgcz_nnls_bars.png") %>%
   ind2col("celltype") %>%
   to_csv("fgcz_nnls_data.csv")
 ```
 
-![](`r out_file("fgcz_nnls_data.png")`)
+![](`r out_file("fgcz_nnls_heat.png")`)
+![](`r out_file("fgcz_nnls_bars.png")`)
 
 
 ### Deconvolution (Allen Brain M1)
@@ -408,9 +502,9 @@ bisque_report <-
 ```
 
 ```{r}
-fgcz_abm1 <- 
+fgcz_abm1 <-
   bisque_report$bulk.props %>%
-  as.data.frame %>%
+  as.data.frame() %>%
   # Order columns consistently
   dplyr::relocate(colnames(fgcz_darm))
 ```
@@ -418,13 +512,13 @@ fgcz_abm1 <-
 Visualize and save to disk.
 
 ```{r}
-fgcz_abm1 %>% 
-  save_heatmap("fgcz_abm1_data.png") %>%
-  as.data.frame %>%
+fgcz_abm1 %>%
+  as.data.frame() %>%
+  save_heatmap("fgcz_abm1_heat.png") %>%
+  save_barchart("fgcz_abm1_bars.png") %>%
   ind2col("celltype") %>%
   to_csv("fgcz_abm1_data.csv")
 ```
 
-![](`r out_file("fgcz_abm1_data.png")`)
-
-
+![](`r out_file("fgcz_abm1_heat.png")`)
+![](`r out_file("fgcz_abm1_bars.png")`)
