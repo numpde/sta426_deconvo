@@ -10,11 +10,20 @@ output: html_document
 
 ## Pertinent links
 
-- [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html)
+- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201222-Bisque) 
+
 - [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
-- [Darmanis et al (2015)](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
-- [Allen Brain M1 scRNA](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
-- [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) of "Darmanis" in terms of "Allen Brain M1"
+
+- [Darmanis et al (2015)](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis) 
+  scRNA dataset
+
+- [Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x) 
+  scRNA dataset
+
+- [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) 
+  of **Darmanis et al** in terms of **Allen Brain M1**
+
+- [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html)
 
 ## Setup    
 
@@ -36,7 +45,7 @@ suppressPackageStartupMessages({
   library(pathlibr)
   
   # Provides `ExpressionSet` data structure
-  # install.packages("Biobase")
+  # BiocManager::install("Biobase")
   library(Biobase)
   
   # Deconvolution package
@@ -279,7 +288,7 @@ abm1_eset <- Biobase::ExpressionSet(
     data = data.frame(
       row.names = rownames(abm1_meta),
       cellType = abm1_meta$celltype,
-      SubjectName = abm1_meta$gender,
+      SubjectName = abm1_meta$donor,
       check.names = FALSE,
       check.rows = FALSE
     ),
@@ -293,6 +302,10 @@ abm1_eset <- Biobase::ExpressionSet(
 
 
 ### Deconvolution (Darmanis)
+
+In this section we use
+**Darmanis et al**
+as the reference dataset.
 
 #### Bisque
 
@@ -342,6 +355,8 @@ fgcz_darm %>% save_heatmap("fgcz_darm_data.png")
 
 #### Comparison with handmade NNLS
 
+For the code see 
+[here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
 
 ```{r}
 fgcz_nnls <- 
@@ -359,6 +374,7 @@ fgcz_nnls <-
   dplyr::relocate(colnames(fgcz_darm))
 ```
 
+Visualize and save to disk.
 
 ```{r}
 fgcz_nnls %>% 
@@ -372,6 +388,10 @@ fgcz_nnls %>%
 
 
 ### Deconvolution (Allen Brain M1)
+
+In this section we use
+**Allen Brain M1**
+as the reference dataset.
 
 ```{r}
 bisque_report <-

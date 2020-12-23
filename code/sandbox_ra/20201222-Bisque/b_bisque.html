@@ -382,11 +382,12 @@ summary {
 <div id="pertinent-links" class="section level2">
 <h2>Pertinent links</h2>
 <ul>
-<li><a href="https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html">Bisque vignette</a></li>
-<li><a href="https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ">FGCZ bulk dataset</a></li>
-<li><a href="https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis">Darmanis et al (2015)</a></li>
-<li><a href="https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x">Allen Brain M1 scRNA</a></li>
-<li><a href="https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen">Analysis</a> of “Darmanis” in terms of “Allen Brain M1”</li>
+<li><p><a href="https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201222-Bisque">Source code</a></p></li>
+<li><p><a href="https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ">FGCZ bulk dataset</a></p></li>
+<li><p><a href="https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis">Darmanis et al (2015)</a> scRNA dataset</p></li>
+<li><p><a href="https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x">Allen Brain M1</a> scRNA dataset</p></li>
+<li><p><a href="https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen">Analysis</a> of <strong>Darmanis et al</strong> in terms of <strong>Allen Brain M1</strong></p></li>
+<li><p><a href="https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html">Bisque vignette</a></p></li>
 </ul>
 </div>
 <div id="setup" class="section level2">
@@ -404,15 +405,15 @@ summary {
   # isntall.packages(&quot;vroom&quot;)
   library(vroom)
   
-  # isntall.packages(&quot;pathlibr&quot;)
+  # install.packages(&quot;pathlibr&quot;)
   library(pathlibr)
   
   # Provides `ExpressionSet` data structure
+  # BiocManager::install(&quot;Biobase&quot;)
   library(Biobase)
   
-  # Download GSE datasets
-  #library(GEOquery)
-
+  # Deconvolution package
+  # install.packages(&quot;BisqueRNA&quot;)
   library(BisqueRNA)
 })</code></pre>
 </div>
@@ -579,7 +580,7 @@ abm1_meta &lt;-
     data = data.frame(
       row.names = rownames(abm1_meta),
       cellType = abm1_meta$celltype,
-      SubjectName = abm1_meta$gender,
+      SubjectName = abm1_meta$donor,
       check.names = FALSE,
       check.rows = FALSE
     ),
@@ -592,6 +593,7 @@ abm1_meta &lt;-
 </div>
 <div id="deconvolution-darmanis" class="section level3">
 <h3>Deconvolution (Darmanis)</h3>
+<p>In this section we use <strong>Darmanis et al</strong> as the reference dataset.</p>
 <div id="bisque" class="section level4">
 <h4>Bisque</h4>
 <pre class="r"><code>bisque_report &lt;-
@@ -629,6 +631,7 @@ print(as.data.frame(names(bisque_report)))</code></pre>
 </div>
 <div id="comparison-with-handmade-nnls" class="section level4">
 <h4>Comparison with handmade NNLS</h4>
+<p>For the code see <a href="https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py">here</a>.</p>
 <pre class="r"><code>fgcz_nnls &lt;- 
   path_to(&quot;code/*/*-NNLS_Darmanis/a_*/celltypes.csv&quot;) %&gt;%
   # The first column is not unique
@@ -642,6 +645,7 @@ print(as.data.frame(names(bisque_report)))</code></pre>
   by_col1 %&gt;% 
   # Order columns in the same way:
   dplyr::relocate(colnames(fgcz_darm))</code></pre>
+<p>Visualize and save to disk.</p>
 <pre class="r"><code>fgcz_nnls %&gt;% 
   save_heatmap(&quot;fgcz_nnls_data.png&quot;) %&gt;%
   as.data.frame %&gt;%
@@ -652,6 +656,7 @@ print(as.data.frame(names(bisque_report)))</code></pre>
 </div>
 <div id="deconvolution-allen-brain-m1" class="section level3">
 <h3>Deconvolution (Allen Brain M1)</h3>
+<p>In this section we use <strong>Allen Brain M1</strong> as the reference dataset.</p>
 <pre class="r"><code>bisque_report &lt;-
   BisqueRNA::ReferenceBasedDecomposition(
     # BULK DATA
