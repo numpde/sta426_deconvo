@@ -25,8 +25,8 @@ fgcz = normalize(fgcz)
 # Deconvolution
 deco = pd.DataFrame({n: nnls(bulk=b, scref=darm) for (n, b) in fgcz.iteritems()})
 
-# Cell type proportions
-deco = norm1(deco)
+# # Cell type proportions
+# deco = norm1(deco)
 
 # Save to disk
 out_dir = mkdir(Path(__file__).with_suffix(""))
