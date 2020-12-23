@@ -10,7 +10,9 @@ editor_options:
 
 ## Pertinent links
 
-- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201222-Bisque) 
+- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201222-Bisque),
+  short link: 
+  [http://bit.ly/b_bisque](http://bit.ly/b_bisque)
 
 - [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
 
