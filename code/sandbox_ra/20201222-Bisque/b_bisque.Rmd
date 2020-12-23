@@ -23,9 +23,14 @@ editor_options:
 - [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) 
   of **Darmanis et al** in terms of **Allen Brain M1**
 
-- Bisque [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
-  [reference](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
-  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R),
+- Bisque 
+  [paper](https://www.nature.com/articles/s41467-020-15816-6),
+  [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
+  [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
+  [github](https://github.com/cozygene/bisque),
+  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
+
+- Bisque uses 
   [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)
 
 
@@ -126,7 +131,7 @@ save_barchart <-
         ggplot(., aes(x = sample, y = y, fill = celltype)) +
           geom_bar(stat = "identity") +
           scale_fill_brewer(palette = "Paired") +
-          xlab("Sample") +
+          xlab("") +
           ylab("") +
           ylim(0, 1) +
           theme(
@@ -134,9 +139,12 @@ save_barchart <-
             panel.grid.minor.x = element_blank(),
             legend.text = element_text(size = 14),
             legend.title = element_blank(),
-            #axis.title.y = element_blank(),
+            
+            axis.title.y = element_blank(),
             axis.text.y = element_blank(),
             axis.ticks.y = element_blank(),
+            
+            axis.title.x = element_blank(),
             axis.text.x = element_text(
               a = 90,
               vjust = 0.5,
@@ -201,27 +209,31 @@ darm_meta <- from_csv(path_to("data/*/2015-Darmanis/b*/meta.csv.gz")) %>%
   set_names(names(.) %>% str_replace("cell type", "celltype"))
 ```
 
+
+```{r}
+exclude_celltypes <- c("fetal_quiescent", "fetal_replicating", "hybrid")
+```
+
 Plot cell type counts.
 
 ```{r}
 darm_meta$celltype %>%
   data.frame(x = .) %>%
-  ggplot(aes(x = x)) +
-  geom_bar(fill = "steelblue") +
+  dplyr::mutate(c = (x %in% exclude_celltypes)) %>%
+  ggplot(aes(x = x, fill = c)) +
+  geom_bar() +
   ggtitle("Cell types in the 'Darmanis' reference dataset") +
   xlab("") +
   ylab("") +
+  theme(legend.position = "none") +
   scale_y_log10() +
   hist_theme
 ```
 
-
-Remove certain cell types
+Remove unnecessary cell types
 from the scRNA reference dataset.
 
 ```{r}
-exclude_celltypes <- c("fetal_quiescent", "fetal_replicating", "hybrid")
-
 darm_meta <-
   darm_meta %>%
   dplyr::filter(!(celltype %in% exclude_celltypes))
@@ -445,7 +457,7 @@ fgcz_darm %>%
 ![](`r out_file("fgcz_darm_bars.png")`)
 
 
-#### Comparison with handmade NNLS
+#### Comparison with baseline NNLS
 
 For the code see 
 [here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
