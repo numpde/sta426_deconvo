@@ -30,10 +30,15 @@ editor_options:
   [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
   [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
   [github](https://github.com/cozygene/bisque),
-  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
-
-- Bisque uses 
+  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R);
+  uses 
   [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)
+
+- MuSiC
+  [paper](https://www.nature.com/articles/s41467-018-08023-x),
+  [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
+  [github](https://github.com/xuranw/MuSiC),
+  [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
 
 
 
@@ -50,6 +55,8 @@ suppressPackageStartupMessages({
   requireNamespace("pheatmap")
   requireNamespace("stringr")
   requireNamespace("reshape2")
+  
+  # avoid importing `exprs`
   requireNamespace("rlang")
 
   # https://vroom.r-lib.org/articles/vroom.html
