@@ -1,7 +1,7 @@
 ---
 title: "Cell type deconvolution with BisqueRNA"
 author: "RA ([numpde](https://github.com/numpde/))"
-date: "2020-Dec-22"
+date: "2020-Dec-24"
 output: html_document
 editor_options:
  chunk_output_type: console
@@ -46,8 +46,7 @@ suppressPackageStartupMessages({
   library(pheatmap)
   library(stringr)
   library(reshape2)
-
-  requireNamespace("readr")
+  library(rlang)
 
   # https://vroom.r-lib.org/articles/vroom.html
   # isntall.packages("vroom")
@@ -73,21 +72,50 @@ suppressPackageStartupMessages({
 ### Paths
 
 ```{r}
-out_file <- (function(.) pathlibr::Path$new("./b_output")$join(.)$show)
+BASEPATH <- pathlibr::Path$new(".")
+```
+
+```{r}
+out_file <- (function(.) BASEPATH$join("./b_output")$join(.)$show)
 dir.create(out_file(""), showWarnings = FALSE)
 ```
 
 ```{r}
-path_to <- (function(.) Sys.glob(pathlibr::Path$new("../../..")$join(.)$show))
+path_to <- (function(.) Sys.glob(BASEPATH$join("../../..")$join(.)$show))
 ```
 
-### Row names
+### Random-seed
+
+```{r}
+set.seed(43)
+```
+
+### Row names, etc.
 
 ```{r}
 # Use first column as index
 by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
 # Use index as new column `name`
 ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+```{r}
+group_by_and_sum <-
+  function(., column_name) {
+    (.) %>%
+      dplyr::group_by(!!rlang::sym(column_name)) %>%
+      dplyr::summarise_all(sum) %>%
+      tibble::column_to_rownames(column_name)
+  }
+```
+
+```{r}
+fix_names <-
+  function(.) {
+    (.) %>%
+      # https://stackoverflow.com/a/55184433
+      set_names(names(.) %>% str_replace("cell type", "celltype"))
+  }
 ```
 
 ### Reading and writing tab-delimited files
@@ -110,6 +138,10 @@ to_csv <- (function(., f) vroom_write(., out_file(f), delim = "\t"))
 ### Plotting
 
 ```{r}
+ggplot2::theme_set(theme_light(base_size = 15))
+```
+
+```{r}
 # Wide plots (inches)
 WIDTH1 <- 20
 HEIGHT1 <- 3
@@ -117,8 +149,13 @@ HEIGHT1 <- 3
 
 ```{r}
 hist_theme <-
-  theme(axis.text.x = element_text(a = 45, hjust = 1, size = 15)) +
-  theme(axis.text.y = element_text(a = 00, hjust = 1, size = 15))
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.ticks.x = element_blank(),
+  )
 ```
 
 ```{r}
@@ -126,30 +163,27 @@ save_barchart <-
   function(., filename) {
     as.data.frame(.) %>%
       ind2col("celltype") %>%
-      reshape2::melt(id = "celltype",
-                     var = "sample",
-                     value.name = "y") %>%
+      reshape2::melt(
+        id = "celltype",
+        var = "sample",
+        value.name = "y"
+      ) %>%
       {
         ggplot(., aes(x = sample, y = y, fill = celltype)) +
           geom_bar(stat = "identity") +
           scale_fill_brewer(palette = "Paired") +
-          xlab("") +
-          ylab("") +
           ylim(0, 1) +
+          hist_theme +
           theme(
-            panel.grid.major.x = element_blank(),
-            panel.grid.minor.x = element_blank(),
-            legend.text = element_text(size = 14),
             legend.title = element_blank(),
-            
-            axis.title.y = element_blank(),
+
             axis.text.y = element_blank(),
-            axis.ticks.y = element_blank(),
-            
+
             axis.title.x = element_blank(),
             axis.text.x = element_text(
-              a = 90,
+              a = -90,
               vjust = 0.5,
+              hjust = 0,
               size = 10,
             )
           ) +
@@ -162,6 +196,8 @@ save_barchart <-
       }
     return(.)
   }
+
+# Example:
 # fgcz_darm %>% save_barchart("fgcz_darm_data_bars.png")
 ```
 
@@ -194,9 +230,7 @@ fgcz_data <-
   unz(., unzip(., list = TRUE)$Name) %>%
   from_csv() %>%
   # Collapse ENSG IDs by gene_name:
-  dplyr::group_by(gene_name) %>%
-  dplyr::summarise_all(sum) %>%
-  tibble::column_to_rownames("gene_name")
+  group_by_and_sum("gene_name")
 
 fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```
@@ -207,10 +241,8 @@ fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```{r}
 darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
 darm_meta <- from_csv(path_to("data/*/2015-Darmanis/b*/meta.csv.gz")) %>%
-  # https://stackoverflow.com/a/55184433
-  set_names(names(.) %>% str_replace("cell type", "celltype"))
+  fix_names()
 ```
-
 
 ```{r}
 exclude_celltypes <- c("fetal_quiescent", "fetal_replicating", "hybrid")
@@ -221,15 +253,14 @@ Plot cell type counts.
 ```{r}
 darm_meta$celltype %>%
   data.frame(x = .) %>%
-  dplyr::mutate(c = (x %in% exclude_celltypes)) %>%
-  ggplot(aes(x = x, fill = c)) +
+  ggplot(aes(x = x, fill = if_else(x %in% exclude_celltypes, "drop", "keep"))) +
   geom_bar() +
   ggtitle("Cell types in the 'Darmanis' reference dataset") +
-  xlab("") +
-  ylab("") +
-  theme(legend.position = "none") +
   scale_y_log10() +
-  hist_theme
+  hist_theme +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.text.x = element_text(a = 45, hjust = 1)) +
+  theme(legend.title = element_blank())
 ```
 
 Remove unnecessary cell types
@@ -321,17 +352,19 @@ stopifnot(117 == length(abm1_markergenes))
 Plot cell type counts.
 
 ```{r}
-abm1_meta$celltype %>%
-  data.frame(x = .) %>%
-  ggplot(aes(x = x)) +
-  geom_bar(fill = "darkred") +
+data.frame(
+  x = abm1_meta$celltype,
+  donor = abm1_meta$donor
+) %>%
+  ggplot(aes(x = x, fill = donor)) +
+  geom_bar(position = "dodge") +
   ggtitle("Cell types in the 'Allen Brain M1' reference dataset") +
-  xlab("") +
-  ylab("") +
+  scale_fill_brewer(palette = "Set1") +
   scale_y_log10() +
-  hist_theme
+  hist_theme +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank())
 ```
-
 
 ## Deconvolution by Bisque
 
@@ -392,6 +425,7 @@ abm1_eset <- Biobase::ExpressionSet(
 ```
 
 
+
 ### Deconvolution (Darmanis)
 
 In this section we use
@@ -417,19 +451,36 @@ bisque_report <-
 print(as.data.frame(names(bisque_report)))
 ```
 
-It is not clear
-whether this is correct:
+The meaning of `rnorm` is not clear
+from the
+[manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
+so this might be incorrect:
 
 ```{r}
-explained_proportions <-
+explained_fractions <-
   1 - (sqrt(bisque_report$rnorm) / sqrt(colSums(fgcz_data[bisque_report$genes.used, ]**2)))
-
-print(explained_proportions)
 ```
 
 ```{r}
+data.frame(
+  q = explained_fractions,
+  r = fgcz_meta$RIN,
+  s = fgcz_meta$Source
+) %>%
+  ggplot(aes(x = q, y = r, color = s)) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Explained fraction", y = "RIN", color = "Sample source") +
+  geom_point(size = 5)
+```
+
+
+Bisque returns proportions 
+that sum to one.
+Undo that:
+
+```{r}
 fgcz_darm <-
-  t(t(bisque_report$bulk.props) * explained_proportions)
+  t(t(bisque_report$bulk.props) * explained_fractions)
 ```
 
 Cluster bulk samples by composition.
@@ -468,14 +519,12 @@ For the code see
 fgcz_nnls <-
   path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
   # The first column is not unique
-  # The header contains minuses, e.g. "H-0C083"
+  # The header contains minuses, e.g. "H-0C083", keep them
   utils::read.delim(., check.names = F) %>%
-  # https://stackoverflow.com/a/55184433
-  set_names(names(.) %>% str_replace("cell type", "celltype")) %>%
+  # `cell type` ~> `celltype`
+  fix_names() %>%
   # Collapse cell types:
-  dplyr::group_by(celltype) %>%
-  dplyr::summarise_all(sum) %>%
-  by_col1() %>%
+  group_by_and_sum("celltype") %>%
   # Order columns in the same way:
   dplyr::relocate(colnames(fgcz_darm))
 ```
@@ -536,3 +585,38 @@ fgcz_abm1 %>%
 
 ![](`r out_file("fgcz_abm1_heat.png")`)
 ![](`r out_file("fgcz_abm1_bars.png")`)
+
+
+[//]: # XX -- TODO
+
+```{r, include=FALSE, echo=FALSE}
+library(SingleCellExperiment)
+library(scater)
+factor_name <- "Condition"
+fgcz_data %>%
+  edgeR::cpm(.) %>%
+  {
+    (.)[abm1_markergenes, ]
+  } %>%
+  {
+    list(logcounts = log(1 + .))
+  } %>%
+  SingleCellExperiment(assays = .) %>%
+  scater::runMDS() %>%
+  SingleCellExperiment::reducedDim() %>%
+  as.data.frame() %>%
+  setNames(c("x", "y")) %>%
+  ggplot(aes(x = x, y = y, color = fgcz_meta[[factor_name]])) +
+  labs(color = factor_name) +
+  geom_point(size = 5)
+```
+
+```{r, include=FALSE, echo=FALSE}
+fgcz_abm1 %>%
+  t() %>%
+  as.data.frame() %>%
+  dplyr::mutate(condition = fgcz_meta$Condition) %>%
+  {
+    MASS::lda(formula = condition ~ ., data = (.))
+  }
+```
