@@ -57,7 +57,7 @@ suppressPackageStartupMessages({
   library(vroom)
 
   # install.packages("pathlibr")
-  library(pathlibr)
+  requireNamespace("pathlibr")
 
   # Provides `ExpressionSet` data structure
   # BiocManager::install("Biobase")
@@ -130,7 +130,7 @@ Note: The function `utils::read.delim` is too slow
 to read wide tables.
 
 ```{r}
-Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 100)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 50)
 from_csv <- (function(.) suppressMessages(vroom(., del = "\t")) %>% by_col1())
 ```
 
@@ -375,10 +375,10 @@ stopifnot(117 == length(abm1_markergenes))
 ```
 
 
-## Deconvolution by Bisque
+## Deconvolution
 
 
-### Deconvolution (from Darmanis) {.tabset .tabset-fade .tabset-pills}
+### From Darmanis {.tabset .tabset-fade .tabset-pills}
 
 In this section we use
 **Darmanis et al**
@@ -483,9 +483,14 @@ visualize_and_save <-
   function(., prefix = deparse(substitute(.))) {
     as <- {function(ext) paste(prefix, ext, sep = "_")}
     
-    as.data.frame(.) %>%
+    (.) %>%
+      # Order the columns consistently
+      {(.)[, colnames(fgcz_darm_bisque)]} %>%
+      #
       save_heatmap(as("heat.png")) %>%
       save_barchart(as("bars.png")) %>%
+      #
+      as.data.frame() %>%
       ind2col("celltype") %>%
       to_csv(as("data.csv"))
   }
@@ -515,8 +520,8 @@ print(as.data.frame(names(music_report)))
 ```
 
 ```{r}
-music_report$Est.prop.weighted %>%
-  t() %>%
+t(music_report$Est.prop.weighted) %>%
+  {(.)[rownames(fgcz_darm_bisque), ]} %>%
   visualize_and_save("fgcz_darm_music")
 ```
 
@@ -538,8 +543,6 @@ path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
   fix_names() %>%
   # Collapse cell types:
   group_by_and_sum("celltype") %>%
-  # Order columns in the same way:
-  dplyr::relocate(colnames(fgcz_darm_bisque)) %>%
   visualize_and_save("fgcz_darm_nnls")
 ```
 
@@ -548,7 +551,7 @@ path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
 
 
 
-### Deconvolution (from Allen Brain M1)
+### From Allen Brain M1
 
 In this section we use
 **Allen Brain M1**
@@ -597,8 +600,6 @@ Order columns consistently with above attempt.
   
 ```{r}
 bisque_report$bulk.props %>%
-  as.data.frame() %>%
-  dplyr::relocate(colnames(fgcz_darm_bisque)) %>%
   visualize_and_save("fgcz_abm1_bisque")
 ```
 
