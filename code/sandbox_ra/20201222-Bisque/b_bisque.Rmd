@@ -17,10 +17,10 @@ editor_options:
 - [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
 
 - [Darmanis et al (2015)](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis) 
-  scRNA dataset
+  reference scRNA dataset
 
 - [Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x) 
-  scRNA dataset
+  reference scRNA dataset
 
 - [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) 
   of **Darmanis et al** in terms of **Allen Brain M1**
@@ -36,7 +36,10 @@ editor_options:
   [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)
 
 
-## Setup    
+
+## Preliminaries {.tabset .tabset-fade .tabset-pills}
+
+### Setup    
 
 ```{r setup, include=TRUE}
 suppressPackageStartupMessages({
@@ -64,10 +67,6 @@ suppressPackageStartupMessages({
   library(BisqueRNA)
 })
 ```
-
-
-
-## Preliminaries
 
 ### Paths
 
@@ -118,7 +117,7 @@ fix_names <-
   }
 ```
 
-### Reading and writing tab-delimited files
+### Tab-delimited files
 
 Note: The function `utils::read.delim` is too slow
 to read wide tables.
@@ -219,10 +218,10 @@ save_heatmap <-
 ```
 
 
-## Data sources
+## Data sources {.tabset .tabset-fade .tabset-pills}
 
 
-### Bulk expression dataset: FGCZ
+### Bulk expression: FGCZ
 
 ```{r}
 fgcz_data <-
@@ -236,7 +235,7 @@ fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```
 
 
-### Reference scRNA dataset: Darmanis et al (2015)
+### Ref scRNA: Darmanis
 
 ```{r}
 darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
@@ -280,7 +279,7 @@ stopifnot(285 == ncol(darm_data))
 ```
 
 
-### Reference scRNA dataset: Allen Brain M1
+### Ref scRNA: Allen Brain M1
 
 ```{r}
 abm1_meta <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/meta.csv*"))
@@ -318,37 +317,6 @@ abm1_meta <-
   dplyr::filter(rownames(.) %in% colnames(abm1_data))
 ```
 
-
-### Define a set of genes as markers
-
-These marker genes 
-[were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
-from the
-[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
-scRNA dataset.
-Technically, these should be the same as 
-in `abm1_data` before filtering.
-Just in case, we subset them the maximal common subset,
-so that 
-we can reconstruct the unaccounted-for proportion
-of cell types from the Bisque report.
-
-
-```{r}
-abm1_markergenes <-
-  path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
-  from_csv() %>%
-  rownames() %>%
-  {
-    (.)[(.) %in% rownames(fgcz_data)]
-  } %>%
-  {
-    (.)[(.) %in% rownames(abm1_data)]
-  }
-
-stopifnot(117 == length(abm1_markergenes))
-```
-
 Plot cell type counts.
 
 ```{r}
@@ -366,12 +334,48 @@ data.frame(
   theme(axis.title.y = element_blank())
 ```
 
+
+### Marker genes
+
+These marker genes 
+[were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
+from the
+[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
+scRNA dataset.
+Technically, these should be the same as 
+in `abm1_data` before filtering.
+Just in case, we subset them the maximal common subset.
+
+
+```{r}
+abm1_markergenes <-
+  path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
+  from_csv() %>%
+  rownames() %>%
+  {
+    (.)[(.) %in% rownames(fgcz_data)]
+  } %>%
+  {
+    (.)[(.) %in% rownames(abm1_data)]
+  }
+
+stopifnot(117 == length(abm1_markergenes))
+```
+
+
 ## Deconvolution by Bisque
 
 
-### Repackage the data
+### Deconvolution (from Darmanis) {.tabset .tabset-fade .tabset-pills}
 
-This section follows the 
+In this section we use
+**Darmanis et al**
+as the reference dataset.
+
+#### Bisque {#fgcz_darm}
+
+Repackage the data
+following the 
 [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html).
 
 ```{r}
@@ -403,36 +407,7 @@ darm_eset <- Biobase::ExpressionSet(
 )
 ```
 
-```{r}
-abm1_eset <- Biobase::ExpressionSet(
-  # Expression data
-  assayData = as.matrix(abm1_data),
-  # Metadata
-  phenoData = Biobase::AnnotatedDataFrame(
-    data = data.frame(
-      row.names = rownames(abm1_meta),
-      cellType = abm1_meta$celltype,
-      SubjectName = abm1_meta$donor,
-      check.names = FALSE,
-      check.rows = FALSE
-    ),
-    varMetadata = data.frame(
-      row.names = c("cellType", "SubjectName"),
-      labelDescription = c("cellType", "SubjectName")
-    )
-  )
-)
-```
-
-
-
-### Deconvolution (Darmanis)
-
-In this section we use
-**Darmanis et al**
-as the reference dataset.
-
-#### Bisque
+Deconvolution.
 
 ```{r}
 bisque_report <-
@@ -451,6 +426,14 @@ bisque_report <-
 print(as.data.frame(names(bisque_report)))
 ```
 
+Bisque returns proportions 
+that sum to one:
+
+```{r}
+stopifnot(max(abs(1 - colSums(bisque_report$bulk.props))) <= 1e-10)
+```
+
+We undo that using the residual.
 The meaning of `rnorm` is not clear
 from the
 [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
@@ -461,22 +444,8 @@ explained_fractions <-
   1 - (sqrt(bisque_report$rnorm) / sqrt(colSums(fgcz_data[bisque_report$genes.used, ]**2)))
 ```
 
-```{r}
-data.frame(
-  q = explained_fractions,
-  r = fgcz_meta$RIN,
-  s = fgcz_meta$Source
-) %>%
-  ggplot(aes(x = q, y = r, color = s)) +
-  scale_fill_brewer(palette = "Set2") +
-  labs(x = "Explained fraction", y = "RIN", color = "Sample source") +
-  geom_point(size = 5)
-```
-
-
-Bisque returns proportions 
-that sum to one.
-Undo that:
+Rescale proportions to 
+the "explained fractions".
 
 ```{r}
 fgcz_darm <-
@@ -510,7 +479,7 @@ fgcz_darm %>%
 ![](`r out_file("fgcz_darm_bars.png")`)
 
 
-#### Comparison with baseline NNLS
+#### Baseline NNLS
 
 For the code see 
 [here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
@@ -544,11 +513,37 @@ fgcz_nnls %>%
 ![](`r out_file("fgcz_nnls_bars.png")`)
 
 
-### Deconvolution (Allen Brain M1)
+
+### Deconvolution (from Allen Brain M1)
 
 In this section we use
 **Allen Brain M1**
 as the reference dataset.
+
+Repackage:
+
+```{r}
+abm1_eset <- Biobase::ExpressionSet(
+  # Expression data
+  assayData = as.matrix(abm1_data),
+  # Metadata
+  phenoData = Biobase::AnnotatedDataFrame(
+    data = data.frame(
+      row.names = rownames(abm1_meta),
+      cellType = abm1_meta$celltype,
+      SubjectName = abm1_meta$donor,
+      check.names = FALSE,
+      check.rows = FALSE
+    ),
+    varMetadata = data.frame(
+      row.names = c("cellType", "SubjectName"),
+      labelDescription = c("cellType", "SubjectName")
+    )
+  )
+)
+```
+
+Deconvolution:
 
 ```{r}
 bisque_report <-
@@ -564,11 +559,12 @@ bisque_report <-
   )
 ```
 
+Order columns consistently with above attempt.
+  
 ```{r}
 fgcz_abm1 <-
   bisque_report$bulk.props %>%
   as.data.frame() %>%
-  # Order columns consistently
   dplyr::relocate(colnames(fgcz_darm))
 ```
 
@@ -585,6 +581,48 @@ fgcz_abm1 %>%
 
 ![](`r out_file("fgcz_abm1_heat.png")`)
 ![](`r out_file("fgcz_abm1_bars.png")`)
+
+
+***
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+The following is under construction.
+
+
+### Discussion
+
+The cell type proportions [returned by Bisque](#fgcz_darm)
+vary more than expected.
+Let us introduce 
+the deviations from the average predicted profile
+as
+
+```{r}
+fgcz_darm_mean <- 
+```
+
+and the deviations from it as
+
+```{r}
+fgcz_darm_dev <- (fgcz_darm - rowMeans(fgcz_darm))
+```
+
+
+```{r}
+data.frame(
+  q = explained_fractions,
+  r = fgcz_meta$RIN,
+  s = fgcz_meta$Source
+) %>%
+  ggplot(aes(x = q, y = r, color = s)) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Explained fraction", y = "RIN", color = "Sample source") +
+  geom_point(size = 5)
+```
+
 
 
 [//]: # XX -- TODO
