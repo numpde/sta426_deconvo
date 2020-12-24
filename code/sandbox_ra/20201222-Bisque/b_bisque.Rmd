@@ -583,44 +583,84 @@ fgcz_abm1 %>%
 ![](`r out_file("fgcz_abm1_bars.png")`)
 
 
-***
-```{r include=FALSE}
-knitr::knit_exit()
-```
-
-
-The following is under construction.
-
-
-### Discussion
+### Discussion {.tabset .tabset-fade .tabset-pills}
 
 The cell type proportions [returned by Bisque](#fgcz_darm)
-vary more than expected.
+vary rather more than expected.
 Let us introduce 
 the deviations from the average predicted profile
 as
 
 ```{r}
-fgcz_darm_mean <- 
+fgcz_darm_dev <- 
+  colMeans(abs(fgcz_darm - rowMeans(fgcz_darm))) %>% 
+  {2 * rank(.) / length(.) - 1}
 ```
 
-and the deviations from it as
+The samples come from four
+different hospitals 
+(the field `fgcz_meta$Source`),
+which could introduce the strongest batch effect.
+We can also compare that 
+to the [RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
+(RNA integrity number).
+Age could be another important factor.
 
 ```{r}
-fgcz_darm_dev <- (fgcz_darm - rowMeans(fgcz_darm))
+show <- 
+  function(on_the_y_axis) {
+    data.frame(
+      q = fgcz_darm_dev,
+      r = fgcz_meta[[on_the_y_axis]],
+      c = fgcz_meta$Condition,
+      s = fgcz_meta$Source
+    ) %>% {
+      ggplot(., aes(x = q, y = r, shape = c, color = s)) +
+      labs(
+        x = "Deviation from the average composition",
+        y = on_the_y_axis,
+        color = "Sample source",
+        shape = "Condition"
+      ) +
+      geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
+      scale_color_brewer(palette = "Set1")
+    }
+  }
+```
+
+#### RIN
+
+```{r}
+show("RIN")
+```
+
+In the above figure,
+ALS samples are more frequent on the +1 side, 
+and vice versa.
+This global trend seems to be
+explained by the sample source.
+In particular, samples from **PD**
+are all ALS-free and
+accumulate on the -1 side.
+
+Within samples from **Lo**,
+a trend in RIN can be perceived:
+ALS samples have higher RIN
+than control samples.
+
+#### Age
+
+```{r}
+show("Age")
 ```
 
 
-```{r}
-data.frame(
-  q = explained_fractions,
-  r = fgcz_meta$RIN,
-  s = fgcz_meta$Source
-) %>%
-  ggplot(aes(x = q, y = r, color = s)) +
-  scale_fill_brewer(palette = "Set2") +
-  labs(x = "Explained fraction", y = "RIN", color = "Sample source") +
-  geom_point(size = 5)
+
+***
+
+
+```{r include=FALSE}
+knitr::knit_exit()
 ```
 
 
