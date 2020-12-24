@@ -1,5 +1,5 @@
 ---
-title: "Cell type deconvolution with BisqueRNA"
+title: "Cell type deconvolution"
 author: "RA ([numpde](https://github.com/numpde/))"
 date: "2020-Dec-24"
 output: html_document
@@ -46,10 +46,11 @@ suppressPackageStartupMessages({
   library(magrittr)
   library(dplyr)
   library(ggplot2)
-  library(pheatmap)
-  library(stringr)
-  library(reshape2)
-  library(rlang)
+
+  requireNamespace("pheatmap")
+  requireNamespace("stringr")
+  requireNamespace("reshape2")
+  requireNamespace("rlang")
 
   # https://vroom.r-lib.org/articles/vroom.html
   # isntall.packages("vroom")
@@ -64,7 +65,13 @@ suppressPackageStartupMessages({
 
   # Deconvolution package
   # install.packages("BisqueRNA")
-  library(BisqueRNA)
+  requireNamespace("BisqueRNA")
+
+  # # https://xuranw.github.io/MuSiC/articles/MuSiC.html
+  # install.packages("devtools")
+  # devtools::install_github("xuranw/MuSiC")
+  require("xbioc") # For MuSiC
+  requireNamespace("MuSiC")
 })
 ```
 
@@ -113,7 +120,7 @@ fix_names <-
   function(.) {
     (.) %>%
       # https://stackoverflow.com/a/55184433
-      set_names(names(.) %>% str_replace("cell type", "celltype"))
+      set_names(names(.) %>% stringr::str_replace("cell type", "celltype"))
   }
 ```
 
@@ -192,12 +199,10 @@ save_barchart <-
             height = HEIGHT1,
             device = "png"
           )
-      }
+      } %>%
+      suppressWarnings()
     return(.)
   }
-
-# Example:
-# fgcz_darm %>% save_barchart("fgcz_darm_data_bars.png")
 ```
 
 ```{r}
@@ -215,6 +220,13 @@ save_heatmap <-
       )
     return(.)
   }
+```
+
+
+### R session info
+
+```{r}
+sessionInfo()
 ```
 
 
@@ -372,7 +384,7 @@ In this section we use
 **Darmanis et al**
 as the reference dataset.
 
-#### Bisque {#fgcz_darm}
+#### Bisque {#fgcz_darm_bisque}
 
 Repackage the data
 following the 
@@ -448,15 +460,15 @@ Rescale proportions to
 the "explained fractions".
 
 ```{r}
-fgcz_darm <-
+fgcz_darm_bisque <-
   t(t(bisque_report$bulk.props) * explained_fractions)
 ```
 
 Cluster bulk samples by composition.
 
 ```{r}
-fgcz_darm <-
-  fgcz_darm %>% {
+fgcz_darm_bisque <-
+  fgcz_darm_bisque %>% {
     (.)[, hclust(dist(t(.)))$order]
   }
 ```
@@ -467,16 +479,49 @@ visualize inferred cell type composition
 by bulk sample.
 
 ```{r, results = FALSE}
-fgcz_darm %>%
-  as.data.frame() %>%
-  save_heatmap("fgcz_darm_heat.png") %>%
-  save_barchart("fgcz_darm_bars.png") %>%
-  ind2col("celltype") %>%
-  to_csv("fgcz_darm_data.csv")
+visualize_and_save <-
+  function(., prefix = deparse(substitute(.))) {
+    as <- {function(ext) paste(prefix, ext, sep = "_")}
+    
+    as.data.frame(.) %>%
+      save_heatmap(as("heat.png")) %>%
+      save_barchart(as("bars.png")) %>%
+      ind2col("celltype") %>%
+      to_csv(as("data.csv"))
+  }
 ```
 
-![](`r out_file("fgcz_darm_heat.png")`)
-![](`r out_file("fgcz_darm_bars.png")`)
+```{r}
+visualize_and_save(fgcz_darm_bisque)
+```
+
+![](`r out_file("fgcz_darm_bisque_heat.png")`)
+![](`r out_file("fgcz_darm_bisque_bars.png")`)
+
+
+#### MuSiC
+
+```{r}
+music_report <-
+  MuSiC::music_prop(
+    bulk.eset = fgcz_eset,
+    sc.eset = darm_eset,
+    clusters = darm_meta$celltype,
+    samples = names(darm_data)
+  ) %>%
+  suppressMessages()
+
+print(as.data.frame(names(music_report)))
+```
+
+```{r}
+music_report$Est.prop.weighted %>%
+  t() %>%
+  visualize_and_save("fgcz_darm_music")
+```
+
+![](`r out_file("fgcz_darm_music_heat.png")`)
+![](`r out_file("fgcz_darm_music_bars.png")`)
 
 
 #### Baseline NNLS
@@ -485,8 +530,7 @@ For the code see
 [here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
 
 ```{r}
-fgcz_nnls <-
-  path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
+path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
   # The first column is not unique
   # The header contains minuses, e.g. "H-0C083", keep them
   utils::read.delim(., check.names = F) %>%
@@ -495,22 +539,12 @@ fgcz_nnls <-
   # Collapse cell types:
   group_by_and_sum("celltype") %>%
   # Order columns in the same way:
-  dplyr::relocate(colnames(fgcz_darm))
+  dplyr::relocate(colnames(fgcz_darm_bisque)) %>%
+  visualize_and_save("fgcz_darm_nnls")
 ```
 
-Visualize and save to disk.
-
-```{r}
-fgcz_nnls %>%
-  as.data.frame() %>%
-  save_heatmap("fgcz_nnls_heat.png") %>%
-  save_barchart("fgcz_nnls_bars.png") %>%
-  ind2col("celltype") %>%
-  to_csv("fgcz_nnls_data.csv")
-```
-
-![](`r out_file("fgcz_nnls_heat.png")`)
-![](`r out_file("fgcz_nnls_bars.png")`)
+![](`r out_file("fgcz_darm_nnls_heat.png")`)
+![](`r out_file("fgcz_darm_nnls_bars.png")`)
 
 
 
@@ -562,39 +596,29 @@ bisque_report <-
 Order columns consistently with above attempt.
   
 ```{r}
-fgcz_abm1 <-
-  bisque_report$bulk.props %>%
+bisque_report$bulk.props %>%
   as.data.frame() %>%
-  dplyr::relocate(colnames(fgcz_darm))
+  dplyr::relocate(colnames(fgcz_darm_bisque)) %>%
+  visualize_and_save("fgcz_abm1_bisque")
 ```
 
-Visualize and save to disk.
-
-```{r}
-fgcz_abm1 %>%
-  as.data.frame() %>%
-  save_heatmap("fgcz_abm1_heat.png") %>%
-  save_barchart("fgcz_abm1_bars.png") %>%
-  ind2col("celltype") %>%
-  to_csv("fgcz_abm1_data.csv")
-```
-
-![](`r out_file("fgcz_abm1_heat.png")`)
-![](`r out_file("fgcz_abm1_bars.png")`)
+![](`r out_file("fgcz_abm1_bisque_heat.png")`)
+![](`r out_file("fgcz_abm1_bisque_bars.png")`)
 
 
 ### Discussion {.tabset .tabset-fade .tabset-pills}
 
-The cell type proportions [returned by Bisque](#fgcz_darm)
+The cell type proportions [returned by Bisque](#fgcz_darm_bisque)
 vary rather more than expected.
 Let us introduce 
 the deviations from the average predicted profile
 as
 
 ```{r}
-fgcz_darm_dev <- 
-  colMeans(abs(fgcz_darm - rowMeans(fgcz_darm))) %>% 
-  {2 * rank(.) / length(.) - 1}
+fgcz_darm_dev <-
+  colMeans(abs(fgcz_darm_bisque - rowMeans(fgcz_darm_bisque))) %>% {
+    2 * rank(.) / length(.) - 1
+  }
 ```
 
 The samples come from four
@@ -607,7 +631,7 @@ to the [RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
 Age could be another important factor.
 
 ```{r}
-show <- 
+show <-
   function(on_the_y_axis) {
     data.frame(
       q = fgcz_darm_dev,
@@ -616,14 +640,14 @@ show <-
       s = fgcz_meta$Source
     ) %>% {
       ggplot(., aes(x = q, y = r, shape = c, color = s)) +
-      labs(
-        x = "Deviation from the average composition",
-        y = on_the_y_axis,
-        color = "Sample source",
-        shape = "Condition"
-      ) +
-      geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
-      scale_color_brewer(palette = "Set1")
+        labs(
+          x = "Deviation from the average composition",
+          y = on_the_y_axis,
+          color = "Sample source",
+          shape = "Condition"
+        ) +
+        geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
+        scale_color_brewer(palette = "Set1")
     }
   }
 ```
@@ -670,13 +694,46 @@ show("Age")
 knitr::knit_exit()
 ```
 
+## DWLS
+
+```{r}
+# https://github.com/dtsoucas/DWLS/blob/master/Manual.docx
+BiocManager::install("MAST")
+remotes::install_bitbucket("yuanlab/dwls")
+requireNamespace("DWLS")
+```
+
+```{r}
+x <- MAST::FromMatrix(
+  exprsArray = as.matrix(darm_data),
+  cData = darm_meta,
+  class = "SingleCellAssay",
+  check_sanity = FALSE
+)
+
+x <-
+  DWLS::buildSignatureMatrixMAST(
+    scdata = as.matrix(darm_data),
+    id = setNames(as.list(darm_meta[["celltype"]]), rownames(darm_meta))
+  )
+
+require("ROCR")
+require("MAST")
+scdata_dummy <- matrix(sample.int(100, size = 4 * 15, replace = T), nrow = 5, ncol = 4)
+rownames(scdata_dummy) <- paste("Gene", 1:nrow(scdata_dummy), sep = "")
+colnames(scdata_dummy) <- paste("Cell", 1:ncol(scdata_dummy), sep = "")
+y <- DWLS::DEAnalysisMAST(scdata = scdata_dummy, id = c("A", "B", "A", "B"), path = "./here.dat")
+# Fails with:
+#  Error in .subset2(x, i, exact = exact) : invalid subscript type 'S4'
+```
+
 
 [//]: # XX -- TODO
 
 ```{r, include=FALSE, echo=FALSE}
 library(SingleCellExperiment)
 library(scater)
-factor_name <- "Condition"
+factor_name <- "Source"
 fgcz_data %>%
   edgeR::cpm(.) %>%
   {
