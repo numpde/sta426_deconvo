@@ -526,9 +526,11 @@ the deviations from the average predicted profile
 as
 
 ```{r}
-fgcz_darm_dev <-
-  colMeans(abs(fgcz_darm_bisque - rowMeans(fgcz_darm_bisque))) %>% {
-    2 * rank(.) / length(.) - 1
+polarize_samples <-
+  function (deconvolved) {
+    colMeans(deconvolved - rowMeans(deconvolved)) %>% 
+      # Ordered and centered at zero:
+      {2 * rank(.) / length(.) - 1}
   }
 ```
 
@@ -543,48 +545,35 @@ Age could be another important factor.
 
 ```{r}
 show <-
-  function(on_the_y_axis) {
-    data.frame(
-      q = fgcz_darm_dev,
-      r = fgcz_meta[[on_the_y_axis]],
-      c = fgcz_meta$Condition,
-      s = fgcz_meta$Source
-    ) %>% {
-      ggplot(., aes(x = q, y = r, shape = c, color = s)) +
-        labs(
-          x = "Deviation from the average composition",
-          y = on_the_y_axis,
-          color = "Sample source",
-          shape = "Condition"
-        ) +
-        geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
-        scale_color_brewer(palette = "Set1")
-    }
+  function(., on_the_y_axis) {
+    polarize_samples(.) %>%
+      data.frame(
+        q = .,
+        r = fgcz_meta[names(.), on_the_y_axis],
+        c = fgcz_meta[names(.), "Condition"],
+        s = fgcz_meta[names(.), "Source"]
+      ) %>% {
+        ggplot(., aes(x = q, y = r, shape = c, color = s)) +
+          labs(
+            x = "Deviation from the average composition",
+            y = on_the_y_axis,
+            color = "Sample source",
+            shape = "Condition"
+          ) +
+          geom_point(size = 5, alpha = 0.2 + abs((.)$q)) +
+          scale_color_brewer(palette = "Set1")
+      }
   }
 ```
 
-
 ```{r}
-show("RIN")
+fgcz_darm_bisque %>%
+  show("RIN")
 ```
 
-In the above figure,
-ALS samples are more frequent on the +1 side, 
-and vice versa.
-This global trend seems to be
-explained by the sample source.
-In particular, samples from **PD**
-are all ALS-free and
-accumulate on the -1 side.
-
-Within samples from **Lo**,
-a trend in RIN can be perceived:
-ALS samples have higher RIN
-than control samples.
-
-
 ```{r}
-show("Age")
+fgcz_darm_bisque %>%
+  show("Age")
 ```
 
 
@@ -617,6 +606,18 @@ visualize_and_save(fgcz_darm_music)
 ![](`r out_file("fgcz_darm_music_bars.png")`)
 
 
+```{r}
+fgcz_darm_music %>%
+  show("RIN")
+```
+
+```{r}
+fgcz_darm_music %>%
+  show("Age")
+```
+
+
+
 #### Baseline NNLS
 
 For the code see 
@@ -634,12 +635,23 @@ fgcz_darm_nnls <-
   group_by_and_sum("celltype")
 ```
 
-```{r, echo=FALSE}
+```{r}
 visualize_and_save(fgcz_darm_nnls)
 ```
 
 ![](`r out_file("fgcz_darm_nnls_heat.png")`)
 ![](`r out_file("fgcz_darm_nnls_bars.png")`)
+
+
+```{r}
+fgcz_darm_nnls %>%
+  show("RIN")
+```
+
+```{r}
+fgcz_darm_nnls %>%
+  show("Age")
+```
 
 
 These results are similar enough to MuSiC's
