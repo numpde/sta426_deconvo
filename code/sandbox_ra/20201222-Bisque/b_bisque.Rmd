@@ -1,8 +1,11 @@
 ---
 title: "Cell type deconvolution"
 author: "RA ([numpde](https://github.com/numpde/))"
-date: "2020-Dec-24"
-output: html_document
+date: "2020-Dec-25"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 1
 editor_options:
  chunk_output_type: console
 ---
@@ -39,7 +42,6 @@ editor_options:
   [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
   [github](https://github.com/xuranw/MuSiC),
   [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
-
 
 
 ## Preliminaries {.tabset .tabset-fade .tabset-pills}
@@ -131,13 +133,17 @@ fix_names <-
   }
 ```
 
+```{r}
+col_norm2 <- (function(.) t(t(.) / sqrt(colSums((.) ** 2))))
+```
+
 ### Tab-delimited files
 
 Note: The function `utils::read.delim` is too slow
 to read wide tables.
 
 ```{r}
-Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 50)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 32)
 from_csv <- (function(.) suppressMessages(vroom(., del = "\t")) %>% by_col1())
 ```
 
@@ -460,7 +466,8 @@ so this might be incorrect:
 
 ```{r}
 explained_fractions <-
-  1 - (sqrt(bisque_report$rnorm) / sqrt(colSums(fgcz_data[bisque_report$genes.used, ]**2)))
+  bisque_report %>%
+  {1 - (sqrt((.)$rnorm) / sqrt(colSums(fgcz_data[(.)$genes.used, ]**2)))}
 ```
 
 Rescale proportions to 
@@ -485,7 +492,7 @@ and
 visualize inferred cell type composition
 by bulk sample.
 
-```{r, results = FALSE}
+```{r}
 visualize_and_save <-
   function(., prefix = deparse(substitute(.))) {
     as <- {function(ext) paste(prefix, ext, sep = "_")}
@@ -511,6 +518,76 @@ visualize_and_save(fgcz_darm_bisque)
 ![](`r out_file("fgcz_darm_bisque_bars.png")`)
 
 
+
+The cell type proportions [returned by Bisque](#fgcz_darm_bisque)
+vary rather more than expected.
+Let us introduce 
+the deviations from the average predicted profile
+as
+
+```{r}
+fgcz_darm_dev <-
+  colMeans(abs(fgcz_darm_bisque - rowMeans(fgcz_darm_bisque))) %>% {
+    2 * rank(.) / length(.) - 1
+  }
+```
+
+The samples come from four
+different hospitals 
+(the field `fgcz_meta$Source`),
+which could introduce the strongest batch effect.
+We can also compare that 
+to the [RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
+(RNA integrity number).
+Age could be another important factor.
+
+```{r}
+show <-
+  function(on_the_y_axis) {
+    data.frame(
+      q = fgcz_darm_dev,
+      r = fgcz_meta[[on_the_y_axis]],
+      c = fgcz_meta$Condition,
+      s = fgcz_meta$Source
+    ) %>% {
+      ggplot(., aes(x = q, y = r, shape = c, color = s)) +
+        labs(
+          x = "Deviation from the average composition",
+          y = on_the_y_axis,
+          color = "Sample source",
+          shape = "Condition"
+        ) +
+        geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
+        scale_color_brewer(palette = "Set1")
+    }
+  }
+```
+
+
+```{r}
+show("RIN")
+```
+
+In the above figure,
+ALS samples are more frequent on the +1 side, 
+and vice versa.
+This global trend seems to be
+explained by the sample source.
+In particular, samples from **PD**
+are all ALS-free and
+accumulate on the -1 side.
+
+Within samples from **Lo**,
+a trend in RIN can be perceived:
+ALS samples have higher RIN
+than control samples.
+
+
+```{r}
+show("Age")
+```
+
+
 #### MuSiC
 
 ```{r}
@@ -527,9 +604,13 @@ print(as.data.frame(names(music_report)))
 ```
 
 ```{r}
-t(music_report$Est.prop.weighted) %>%
-  {(.)[rownames(fgcz_darm_bisque), ]} %>%
-  visualize_and_save("fgcz_darm_music")
+fgcz_darm_music <- 
+  t(music_report$Est.prop.weighted) %>%
+  {(.)[rownames(fgcz_darm_bisque), ]}
+```
+
+```{r}
+visualize_and_save(fgcz_darm_music)
 ```
 
 ![](`r out_file("fgcz_darm_music_heat.png")`)
@@ -542,19 +623,39 @@ For the code see
 [here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
 
 ```{r}
-path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
+fgcz_darm_nnls <- 
+  path_to("code/*/*-NNLS_Darmanis/a_*/celltypes.csv") %>%
   # The first column is not unique
   # The header contains minuses, e.g. "H-0C083", keep them
   utils::read.delim(., check.names = F) %>%
   # `cell type` ~> `celltype`
   fix_names() %>%
   # Collapse cell types:
-  group_by_and_sum("celltype") %>%
-  visualize_and_save("fgcz_darm_nnls")
+  group_by_and_sum("celltype")
+```
+
+```{r, echo=FALSE}
+visualize_and_save(fgcz_darm_nnls)
 ```
 
 ![](`r out_file("fgcz_darm_nnls_heat.png")`)
 ![](`r out_file("fgcz_darm_nnls_bars.png")`)
+
+
+These results are similar enough to MuSiC's
+to warrant a closer look.
+
+```{r}
+# Check that samples are arranged consistently
+stopifnot(all(colnames(fgcz_darm_music) == colnames(fgcz_darm_nnls)))
+
+colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
+  data.frame(x = .) %>%
+  ggplot(aes(x = x)) +
+  geom_histogram() +
+  hist_theme +
+  labs(x = "Cosine similarity (NNLS vs MuSiC)")
+```
 
 
 
@@ -612,79 +713,6 @@ bisque_report$bulk.props %>%
 
 ![](`r out_file("fgcz_abm1_bisque_heat.png")`)
 ![](`r out_file("fgcz_abm1_bisque_bars.png")`)
-
-
-### Discussion {.tabset .tabset-fade .tabset-pills}
-
-The cell type proportions [returned by Bisque](#fgcz_darm_bisque)
-vary rather more than expected.
-Let us introduce 
-the deviations from the average predicted profile
-as
-
-```{r}
-fgcz_darm_dev <-
-  colMeans(abs(fgcz_darm_bisque - rowMeans(fgcz_darm_bisque))) %>% {
-    2 * rank(.) / length(.) - 1
-  }
-```
-
-The samples come from four
-different hospitals 
-(the field `fgcz_meta$Source`),
-which could introduce the strongest batch effect.
-We can also compare that 
-to the [RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
-(RNA integrity number).
-Age could be another important factor.
-
-```{r}
-show <-
-  function(on_the_y_axis) {
-    data.frame(
-      q = fgcz_darm_dev,
-      r = fgcz_meta[[on_the_y_axis]],
-      c = fgcz_meta$Condition,
-      s = fgcz_meta$Source
-    ) %>% {
-      ggplot(., aes(x = q, y = r, shape = c, color = s)) +
-        labs(
-          x = "Deviation from the average composition",
-          y = on_the_y_axis,
-          color = "Sample source",
-          shape = "Condition"
-        ) +
-        geom_point(size = 5, alpha = 0.2 + abs(fgcz_darm_dev)) +
-        scale_color_brewer(palette = "Set1")
-    }
-  }
-```
-
-#### RIN
-
-```{r}
-show("RIN")
-```
-
-In the above figure,
-ALS samples are more frequent on the +1 side, 
-and vice versa.
-This global trend seems to be
-explained by the sample source.
-In particular, samples from **PD**
-are all ALS-free and
-accumulate on the -1 side.
-
-Within samples from **Lo**,
-a trend in RIN can be perceived:
-ALS samples have higher RIN
-than control samples.
-
-#### Age
-
-```{r}
-show("Age")
-```
 
 
 
