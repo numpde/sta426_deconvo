@@ -17,8 +17,8 @@ editor_options:
 ## Pertinent links
 
 - [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
-  short link: 
-  [http://bit.ly/deco_ra](http://bit.ly/deco_ra)
+  [short link](http://bit.ly/deco_ra),
+  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output) of this script
 
 - [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
 
@@ -45,7 +45,6 @@ editor_options:
   [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
   [github](https://github.com/xuranw/MuSiC),
   [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
-
 
 
 
@@ -93,10 +92,11 @@ suppressPackageStartupMessages({
 ```
 
 
-```{r}
+### Session info
+
+```{r, echo=FALSE}
 sessionInfo()
 ```
-
 
 
 ### Paths
@@ -106,7 +106,7 @@ BASEPATH <- pathlibr::Path$new(".")
 ```
 
 ```{r}
-out_file <- (function(.) BASEPATH$join("./b_output")$join(.)$show)
+out_file <- (function(.) BASEPATH$join("./output")$join(.)$show)
 dir.create(out_file(""), showWarnings = FALSE)
 ```
 
@@ -183,7 +183,7 @@ ggplot2::theme_set(theme_light(base_size = 15))
 
 ```{r}
 kable <- function(.) {
-  kableExtra::kbl(.) %>%
+  kableExtra::kbl(., align = "c") %>%
     kableExtra::kable_paper("hover", full_width = F)
 }
 ```
@@ -629,7 +629,7 @@ fgcz_darm_bisque %>%
 exprs <- xbioc::exprs
 pVar <- xbioc::pVar
 
-music_report <-
+music_report.darm <-
   MuSiC::music_prop(
     bulk.eset = fgcz_eset,
     sc.eset = darm_eset,
@@ -640,7 +640,7 @@ music_report <-
 ```
 
 ```{r}
-music_report %>%
+music_report.darm %>%
   summary() %>%
   kable()
 ```
@@ -649,7 +649,7 @@ Estimate cell type proportions (celltype x sample).
 
 ```{r}
 fgcz_darm_music <-
-  t(music_report$Est.prop.weighted) %>% {
+  t(music_report.darm$Est.prop.weighted) %>% {
     (.)[rownames(fgcz_darm_bisque), ]
   }
 ```
@@ -683,24 +683,53 @@ whether there is
 the cell type composition differs 
 in ALS vs Control samples.
 First,
-the following shows the distribution
+the following figure shows the distribution
 of the first principal component
 (of cell type proportions)
 separated by sample source.
 
-```{r, eval=TRUE}
-fgcz_darm_music %>%
+```{r}
+fgcz_darm_music.pca <-
+  fgcz_darm_music %>%
   {
     as.data.frame(prcomp(t(.))$x)
   } %>%
   assert_fgcz_meta_order() %>%
-  cbind(c = fgcz_meta$Condition) %>%
-  cbind(s = fgcz_meta$Source) %>%
-  cbind(a = fgcz_meta$Age) %>%
+  cbind(fgcz_meta)
+```
+
+```{r, eval=TRUE}
+fgcz_darm_music.pca %>% {
+  ggplot(., aes(x = PC1, fill = Source, linetype = Source)) +
+    labs(fill = "Sample source") +
+    guides(linetype = FALSE) +
+    geom_density(
+      position = "identity", alpha = 0.4
+    ) +
+    geom_histogram(
+      aes(y = stat(density) / 5),
+      position = "dodge", bins = 20, color = 1, linetype = 1
+    ) +
+    hist_theme +
+    theme(axis.text.y = element_blank()) +
+    theme(
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+    ) +
+    scale_fill_brewer(palette = "Set1")
+}
+```
+
+The separation by **Source**
+seen in the above figure 
+suggests looking at 
+the **Condition** (ALS vs Control)
+for each **Source** individually.
+
+```{r}
+fgcz_darm_music.pca %>%
   {
-    ggplot(., aes(x = PC1, fill = s, linetype = s)) +
-      labs(fill = "Sample source") +
-      guides(linetype = FALSE) +
+    ggplot(., aes(x = PC1, fill = Condition)) +
       geom_density(
         position = "identity", alpha = 0.4
       ) +
@@ -709,59 +738,64 @@ fgcz_darm_music %>%
         position = "dodge", bins = 20, color = 1, linetype = 1
       ) +
       hist_theme +
-      theme(axis.text.y = element_blank()) +
       theme(
-        panel.grid.major.y = element_blank(),
-        panel.grid.minor.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()
       ) +
-      scale_fill_brewer(palette = "Set1")
-  }
-```
-
-**(IN PROGRESS)**
-
-
-
-
-```{r, eval=FALSE}
-library(SingleCellExperiment)
-library(scater)
-factor_name <- "Source"
-fgcz_darm_music %>%
-  {
-    list(logcounts = (.))
+      scale_fill_brewer(palette = "Set1") +
+      facet_grid(cols = vars(Source))
   } %>%
-  SingleCellExperiment(assays = .) %>%
-  scater::runPCA(ncomponents = 2) %>%
-  SingleCellExperiment::reducedDim() %>%
-  as.data.frame() %>%
-  setNames(c("x", "y")) %>%
-  cbind(s = fgcz_meta$Source) %>%
-  cbind(c = fgcz_meta$Condition) %>%
-  cbind(a = fgcz_meta$Age) %>%
-  {
-    ggplot(., aes(x = x, y = y, color = c)) +
-      geom_point() +
-      labs(color = "Sample source", shape = "Condition") +
-      geom_point(size = 5)
-    # scale_color_brewer(palette = "Set1")
-  }
-```
-
-```{r, eval=FALSE}
-# MuSiC with ABM1
-music_report <-
-  MuSiC::music_prop(
-    bulk.eset = fgcz_eset,
-    sc.eset = abm1_eset,
-    clusters = abm1_meta$celltype,
-    samples = names(abm1_data)
+  ggsave(
+    filename = out_file("fgcz_darm_music_PC1.png"),
+    width = WIDTH1,
+    height = WIDTH1 / 4
   ) %>%
-  suppressMessages()
-
-print(as.data.frame(names(music_report)))
+  invisible()
 ```
 
+![](`r out_file("fgcz_darm_music_PC1.png")`)
+
+
+Among those,
+samples from **Lo**
+show a conspicuous further separation 
+by **Condition**,
+confirmed by the following two-sample t-test.
+
+```{r}
+fgcz_darm_music.pca %>%
+  filter(Source == "Lo") %>%
+  {
+    t.test(
+      x = filter(., Condition == "ALS")$PC1,
+      y = filter(., Condition != "ALS")$PC1,
+      alternative = "less"
+    )
+  } %>%
+  {
+    data.frame(
+      `p-value` = (.)$p.value,
+      `t-stat` = (.)$statistic,
+      `#dof` = (.)$parameter,
+      `In favor of the alternative:` = paste(
+        "PC1(ALS) is", (.)$alternative, "than PC1(Control)"
+      ),
+      row.names = NULL,
+      check.names = FALSE
+    )
+  } %>% 
+  kable()
+```
+
+```{r, eval=FALSE, echo=FALSE}
+# Permutation tests
+
+# install.packages("exactRankTests")
+requireNamespace("exactRankTests")
+
+# install.packages("DAAG")
+requireNamespace("DAAG")
+```
 
 
 #### Baseline NNLS
@@ -807,6 +841,10 @@ fgcz_darm_nnls %>%
 
 These results are similar enough to MuSiC's
 to warrant a closer look.
+For each sample we compute the cosine similarity
+between the two methods
+and plot a histogram of those
+separated by sample source.
 
 ```{r}
 # Check that samples are arranged consistently
@@ -842,11 +880,13 @@ colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
 
 
 
-### From Allen Brain M1
+### From Allen Brain M1 {.tabset .tabset-fade .tabset-pills}
 
 In this section we use
 **Allen Brain M1**
 as the reference dataset.
+
+#### Bisque
 
 Repackage:
 
@@ -896,6 +936,36 @@ bisque_report$bulk.props %>%
 ![](`r out_file("fgcz_abm1_bisque_bars.png")`)
 
 
+#### MuSiC
+
+**(this subsection is in progress)**
+
+```{r, eval=F, cache=TRUE}
+# MuSiC with ABM1
+music_report.abm1 <-
+  MuSiC::music_prop(
+    bulk.eset = fgcz_eset,
+    sc.eset = abm1_eset,
+    clusters = abm1_meta$celltype,
+    samples = names(abm1_data)
+  ) %>%
+  suppressMessages()
+```
+
+```{r, eval=F}
+fgcz_abm1_music <-
+  t(music_report.abm1$Est.prop.weighted)
+```
+
+```{r, eval=F}
+bisque_report$bulk.props %>%
+  visualize_and_save("fgcz_abm1_bisque")
+```
+
+```{r}
+# ![](`r out_file("fgcz_abm1_music_heat.png")`)
+# ![](`r out_file("fgcz_abm1_music_bars.png")`)
+```
 
 
 
