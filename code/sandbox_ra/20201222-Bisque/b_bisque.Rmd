@@ -9,5 +9,4 @@ editor_options:
 ---
 
 
-The page has moved
-[HERE](../20201226-AllDeco/deconvolution.html).
+## The page has moved [HERE](../20201226-AllDeco/deconvolution.html)
