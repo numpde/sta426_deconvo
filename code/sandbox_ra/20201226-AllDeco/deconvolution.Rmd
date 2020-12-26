@@ -648,7 +648,9 @@ music_report %>%
 Estimate cell type proportions (celltype x sample).
 
 ```{r}
-fgcz_darm_music <- t(music_report$Est.prop.weighted)
+fgcz_darm_music <- 
+  t(music_report$Est.prop.weighted) %>%
+  {(.)[rownames(fgcz_darm_bisque), ]}
 ```
 
 ```{r}
@@ -811,11 +813,12 @@ to warrant a closer look.
 ```{r}
 # Check that samples are arranged consistently
 stopifnot(all(colnames(fgcz_darm_music) == colnames(fgcz_darm_nnls)))
+stopifnot(all(rownames(fgcz_darm_music) == rownames(fgcz_darm_nnls)))
 
 colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
   data.frame(x = .) %>%
   ggplot(aes(x = x)) +
-  geom_histogram() +
+  geom_histogram(bins = 20) +
   hist_theme +
   labs(x = "Cosine similarity (NNLS vs MuSiC)")
 ```
