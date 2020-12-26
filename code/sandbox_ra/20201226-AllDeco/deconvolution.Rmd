@@ -10,26 +10,68 @@ editor_options:
  chunk_output_type: console
 ---
 
+
 ## Introduction
 
-(TODO)
+We investigate
+a dataset of 102 bulk [RNA-seq](https://en.wikipedia.org/wiki/RNA-Seq) samples
+extracted from the prefrontal cortex
+of 102 deceased individuals
+([overview](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201130-FirstLook)).
+The dataset is provided by 
+H Rehrauer of FGCZ
+([details](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)).
+Roughly half of the samples are
+from patients diagnosed with 
+[ALS](https://en.wikipedia.org/wiki/Amyotrophic_lateral_sclerosis),
+the remaining ones are referred to as the control group.
+We attempt to infer 
+cell type proportions
+hidden in each bulk RNA-seq sample.
+This procedure,
+known as cell type deconvolution
+([overview](https://bit.ly/sta426_deconvo_sketch)),
+should be integral to
+inference from the sample to disease condition.
+We focus here on reference-based deconvolution:
+in essence,
+if $X$ is a bulk RNA-seq count vector,
+and $a, b, \ldots$
+are single-cell RNA-seq count vectors of
+representatives of relevant cells types,
+one aims to find non-negative coefficients
+$\alpha, \beta, \ldots$
+such that
+$X \approx \alpha a + \beta b + \ldots$.
+Unfortunately,
+this reconstruction
+is confounded by 
+batch effects
+such as difference in sequencing platforms,
+in particular
+different statistical properties of 
+the technical noise 
+of bulk versus single-cell RNA-seq.
 
-## Pertinent links
+As single-cell RNA (scRNA) cell type reference datasets we resort to
+[Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
+(about 400 cells)
+and
+[Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
+(>70k cells).
+The two are compared 
+[here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen).
+Note that Allen Brain M1 is from 
+[snRNA-seq](https://en.wikipedia.org/wiki/SnRNA-seq).
+
+**(in progress)**
+
+
+#### Pertinent links
 
 - [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
-  [short link](http://bit.ly/deco_ra),
-  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output) of this script
+  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output) of this script.
 
-- [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
-
-- [Darmanis et al (2015)](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis) 
-  reference scRNA dataset
-
-- [Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x) 
-  reference scRNA dataset
-
-- [Analysis](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen) 
-  of **Darmanis et al** in terms of **Allen Brain M1**
 
 - Bisque 
   [paper](https://www.nature.com/articles/s41467-020-15816-6),
@@ -38,13 +80,13 @@ editor_options:
   [github](https://github.com/cozygene/bisque),
   [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
   (uses 
-  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf))
+  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)).
 
 - MuSiC
   [paper](https://www.nature.com/articles/s41467-018-08023-x),
   [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
   [github](https://github.com/xuranw/MuSiC),
-  [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
+  [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R).
 
 
 
@@ -103,10 +145,11 @@ sessionInfo()
 
 ```{r}
 BASEPATH <- pathlibr::Path$new(".")
+stopifnot("deconvolution.Rmd" %in% names(BASEPATH$dir))
 ```
 
 ```{r}
-out_file <- (function(.) BASEPATH$join("./output")$join(.)$show)
+out_file <- (function(.) BASEPATH$join("output")$join(.)$show)
 dir.create(out_file(""), showWarnings = FALSE)
 ```
 
@@ -583,14 +626,11 @@ PC1_versus <-
     prcomp(t(.))$x %>%
       as.data.frame() %>%
       assert_fgcz_meta_order() %>%
+      cbind(fgcz_meta) %>%
       cbind(q = (2 * rank((.)$PC1) / length((.)$PC1) - 1)) %>%
-      cbind(c = fgcz_meta$Condition) %>%
-      cbind(s = fgcz_meta$Source) %>%
-      cbind(Age = fgcz_meta$Age) %>%
-      cbind(RIN = fgcz_meta$RIN) %>%
       cbind(y = (.)[[on_the_y_axis]]) %>%
       {
-        ggplot(., aes(x = q, y = y, shape = c, color = s)) +
+        ggplot(., aes(x = q, y = y, shape = Condition, color = Source)) +
           labs(
             x = "Deviation from the average composition (~PC1)",
             y = on_the_y_axis,
@@ -760,30 +800,28 @@ Among those,
 samples from **Lo**
 show a conspicuous further separation 
 by **Condition**,
-confirmed by the following two-sample t-test.
+supported by the following 
+two-sided two-sample t-test.
 
 ```{r}
 fgcz_darm_music.pca %>%
-  filter(Source == "Lo") %>%
-  {
+  filter(Source != "PD") %>%
+  group_by(Source) %>%
+  group_map(~ {
     t.test(
-      x = filter(., Condition == "ALS")$PC1,
-      y = filter(., Condition != "ALS")$PC1,
-      alternative = "less"
-    )
-  } %>%
-  {
-    data.frame(
-      `p-value` = (.)$p.value,
-      `t-stat` = (.)$statistic,
-      `#dof` = (.)$parameter,
-      `In favor of the alternative:` = paste(
-        "PC1(ALS) is", (.)$alternative, "than PC1(Control)"
-      ),
-      row.names = NULL,
-      check.names = FALSE
-    )
-  } %>% 
+      x = filter((.x), Condition == "ALS")$PC1,
+      y = filter((.x), Condition != "ALS")$PC1,
+      alternative = "two"
+    ) %>% {
+      list(
+        `Sample source` = dplyr::pull((.y)),
+        `p-value` = round((.)$p.value, 3),
+        `t-statistic` = round((.)$statistic, 2),
+        `#dof` = round((.)$parameter, 1)
+      )
+    }
+  }) %>%
+  data.table::rbindlist() %>%
   kable()
 ```
 
@@ -890,6 +928,17 @@ as the reference dataset.
 
 Repackage:
 
+```{r, eval=FALSE, echo=FALSE}
+# # HACK
+# a <- unique(abm1_meta$donor)[1]
+# b <- unique(abm1_meta$donor)[2]
+# a <- rownames(abm1_meta[abm1_meta$donor == a, ])[1:10]
+# b <- rownames(abm1_meta[abm1_meta$donor == b, ])[1:10]
+# s <- c(a, b)
+# abm1_meta <- abm1_meta[s, ]
+# abm1_data <- abm1_data[, s]
+```
+
 ```{r}
 abm1_eset <- Biobase::ExpressionSet(
   # Expression data
@@ -941,6 +990,8 @@ bisque_report$bulk.props %>%
 **(this subsection is in progress)**
 
 ```{r, eval=F, cache=TRUE}
+stopifnot(!file.exists(out_file("fgcz_abm1_music.csv")))
+
 # MuSiC with ABM1
 music_report.abm1 <-
   MuSiC::music_prop(
@@ -958,8 +1009,8 @@ fgcz_abm1_music <-
 ```
 
 ```{r, eval=F}
-bisque_report$bulk.props %>%
-  visualize_and_save("fgcz_abm1_bisque")
+fgcz_abm1_music %>%
+  visualize_and_save("fgcz_abm1_music")
 ```
 
 ```{r}
@@ -973,6 +1024,14 @@ bisque_report$bulk.props %>%
 
 (TODO)
 
+
+## Cite as
+
+RA, 
+Cell type deconvolution 
+from bulk RNA-seq of the human brain,
+December 2020,
+[http://bit.ly/deco_ra](http://bit.ly/deco_ra).
 
 ***
 
