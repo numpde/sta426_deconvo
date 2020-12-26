@@ -648,9 +648,10 @@ music_report %>%
 Estimate cell type proportions (celltype x sample).
 
 ```{r}
-fgcz_darm_music <- 
-  t(music_report$Est.prop.weighted) %>%
-  {(.)[rownames(fgcz_darm_bisque), ]}
+fgcz_darm_music <-
+  t(music_report$Est.prop.weighted) %>% {
+    (.)[rownames(fgcz_darm_bisque), ]
+  }
 ```
 
 ```{r}
@@ -741,10 +742,7 @@ fgcz_darm_music %>%
   {
     ggplot(., aes(x = x, y = y, color = c)) +
       geom_point() +
-      labs(
-        color = "Sample source",
-        shape = "Condition"
-      ) +
+      labs(color = "Sample source", shape = "Condition") +
       geom_point(size = 5)
     # scale_color_brewer(palette = "Set1")
   }
@@ -816,11 +814,30 @@ stopifnot(all(colnames(fgcz_darm_music) == colnames(fgcz_darm_nnls)))
 stopifnot(all(rownames(fgcz_darm_music) == rownames(fgcz_darm_nnls)))
 
 colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
-  data.frame(x = .) %>%
-  ggplot(aes(x = x)) +
-  geom_histogram(bins = 20) +
-  hist_theme +
-  labs(x = "Cosine similarity (NNLS vs MuSiC)")
+  data.frame(
+    x = .,
+    s = fgcz_meta$Source
+  ) %>%
+  {
+    ggplot(., aes(x = x, fill = s, linetype = s)) +
+      labs(fill = "Sample source") +
+      labs(x = "Cosine similarity of a sample (NNLS vs MuSiC)") +
+      guides(linetype = FALSE) +
+      geom_density(
+        position = "identity", alpha = 0.4
+      ) +
+      geom_histogram(
+        aes(y = stat(density) / 5),
+        position = "dodge", bins = 30, color = 1, linetype = 1,
+      ) +
+      hist_theme +
+      theme(axis.text.y = element_blank()) +
+      theme(
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+      ) +
+      scale_fill_brewer(palette = "Set1")
+  }
 ```
 
 
