@@ -14,16 +14,11 @@ editor_options:
 
 (TODO)
 
-```{r include=FALSE}
-knitr::knit_exit()
-```
-
-
 ## Pertinent links
 
-- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201222-Bisque),
+- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
   short link: 
-  [http://bit.ly/b_bisque](http://bit.ly/b_bisque)
+  [http://bit.ly/deco_ra](http://bit.ly/deco_ra)
 
 - [FGCZ bulk dataset](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)
 
@@ -41,9 +36,9 @@ knitr::knit_exit()
   [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
   [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
   [github](https://github.com/cozygene/bisque),
-  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R);
-  uses 
-  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)
+  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
+  (uses 
+  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf))
 
 - MuSiC
   [paper](https://www.nature.com/articles/s41467-018-08023-x),
@@ -52,13 +47,15 @@ knitr::knit_exit()
   [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
 
 
+
+
 ## Preliminaries {.tabset .tabset-fade .tabset-pills}
 
 ### Setup    
 
 ```{r setup, include=TRUE}
 suppressPackageStartupMessages({
-  library(magrittr)
+  requireNamespace("magrittr")
   library(dplyr)
   library(ggplot2)
 
@@ -66,19 +63,19 @@ suppressPackageStartupMessages({
   requireNamespace("stringr")
   requireNamespace("reshape2")
 
-  # avoid importing `exprs`
+  # avoid importing `exprs` that leads to clashes
   requireNamespace("rlang")
 
   # https://vroom.r-lib.org/articles/vroom.html
-  # isntall.packages("vroom")
-  library(vroom)
+  # install.packages("vroom")
+  requireNamespace("vroom")
 
   # install.packages("pathlibr")
   requireNamespace("pathlibr")
 
   # Provides `ExpressionSet` data structure
   # BiocManager::install("Biobase")
-  library(Biobase)
+  requireNamespace("Biobase")
 
   # Deconvolution package
   # install.packages("BisqueRNA")
@@ -87,10 +84,20 @@ suppressPackageStartupMessages({
   # # https://xuranw.github.io/MuSiC/articles/MuSiC.html
   # install.packages("devtools")
   # devtools::install_github("xuranw/MuSiC")
-  require("xbioc") # For MuSiC
+  requireNamespace("xbioc") # For MuSiC
   requireNamespace("MuSiC")
+
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
 })
 ```
+
+
+```{r}
+sessionInfo()
+```
+
+
 
 ### Paths
 
@@ -133,33 +140,39 @@ group_by_and_sum <-
 ```
 
 ```{r}
-fix_names <-
-  function(.) {
-    (.) %>%
-      # https://stackoverflow.com/a/55184433
-      set_names(names(.) %>% stringr::str_replace("cell type", "celltype"))
-  }
+fix_names <- function(.) {
+  (.) %>%
+    # https://stackoverflow.com/a/55184433
+    rlang::set_names(stringr::str_replace(names(.), "cell type", "celltype"))
+}
 ```
 
 ```{r}
 col_norm2 <- (function(.) t(t(.) / sqrt(colSums((.)**2))))
 ```
 
-### Tab-delimited files
+### File I/O
 
-Note: The function `utils::read.delim` is too slow
-to read wide tables.
+The function `utils::read.delim` is too slow
+to read wide tables (Allen Brain M1 has >70k cells).
 
 ```{r}
 Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 32)
-from_csv <- (function(.) suppressMessages(vroom(., del = "\t")) %>% by_col1())
+from_csv <- function(.) {
+  vroom::vroom(., del = "\t") %>%
+    by_col1() %>%
+    suppressMessages()
+}
 ```
 
 A call to `to_csv` should be preceded by
-`ind2col("name for index")`.
+`ind2col("name for index")`
+to write the row names.
 
 ```{r}
-to_csv <- (function(., f) vroom_write(., out_file(f), delim = "\t"))
+to_csv <- function(., f) {
+  vroom::vroom_write(., out_file(f), delim = "\t")
+}
 ```
 
 ### Plotting
@@ -169,7 +182,14 @@ ggplot2::theme_set(theme_light(base_size = 15))
 ```
 
 ```{r}
-# Wide plots (inches)
+kable <- function(.) {
+  kableExtra::kbl(.) %>%
+    kableExtra::kable_paper("hover", full_width = F)
+}
+```
+
+```{r}
+# Wide plots (inches?)
 WIDTH1 <- 20
 HEIGHT1 <- 3
 ```
@@ -244,11 +264,7 @@ save_heatmap <-
 ```
 
 
-### R session info
 
-```{r}
-sessionInfo()
-```
 
 
 ## Data sources {.tabset .tabset-fade .tabset-pills}
@@ -256,7 +272,7 @@ sessionInfo()
 
 ### Bulk expression: FGCZ
 
-```{r}
+```{r, cache=TRUE}
 fgcz_data <-
   path_to("data/20201128-FGCZ/*count.zip") %>%
   unz(., unzip(., list = TRUE)$Name) %>%
@@ -267,7 +283,7 @@ fgcz_data <-
 fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```
 
-This will be used as a sanity check.
+This will be used later.
 
 ```{r}
 assert_fgcz_meta_order <-
@@ -277,9 +293,15 @@ assert_fgcz_meta_order <-
   }
 ```
 
+```{r}
+t(fgcz_data) %>%
+  assert_fgcz_meta_order() %>%
+  invisible()
+```
+
 ### Ref scRNA: Darmanis
 
-```{r}
+```{r, cache=TRUE}
 darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
 darm_meta <- from_csv(path_to("data/*/2015-Darmanis/b*/meta.csv.gz")) %>%
   fix_names()
@@ -307,7 +329,7 @@ darm_meta$celltype %>%
 Remove unnecessary cell types
 from the scRNA reference dataset.
 
-```{r}
+```{r, cache=TRUE}
 darm_meta <-
   darm_meta %>%
   dplyr::filter(!(celltype %in% exclude_celltypes))
@@ -323,7 +345,7 @@ stopifnot(285 == ncol(darm_data))
 
 ### Ref scRNA: Allen Brain M1
 
-```{r}
+```{r, cache=TRUE}
 abm1_meta <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/meta.csv*"))
 abm1_data <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/data.csv*"))
 ```
@@ -342,7 +364,7 @@ stopifnot(all(c("PIK3CD", "WNT4", "LDLRAP1") %in% rownames(abm1_data)))
 Drop samples with too little expression,
 otherwise Bisque doesn't go through.
 
-```{r}
+```{r, cache=TRUE}
 abm1_data <-
   abm1_data %>%
   # Keep only genes common with the FGCZ dataset
@@ -389,7 +411,7 @@ in `abm1_data` before filtering.
 Just in case, we subset them the maximal common subset.
 
 
-```{r}
+```{r, cache=TRUE}
 abm1_markergenes <-
   path_to("data/*/*AllenBrain-M1/b*/marker_genes.csv") %>%
   from_csv() %>%
@@ -403,6 +425,7 @@ abm1_markergenes <-
 
 stopifnot(117 == length(abm1_markergenes))
 ```
+
 
 
 ## Deconvolution
@@ -451,7 +474,7 @@ darm_eset <- Biobase::ExpressionSet(
 
 Deconvolution.
 
-```{r}
+```{r, cache=TRUE}
 bisque_report <-
   BisqueRNA::ReferenceBasedDecomposition(
     # BULK DATA
@@ -463,10 +486,15 @@ bisque_report <-
     markers = abm1_markergenes,
     verbose = FALSE
   )
-
-# Fields of the Bisque result
-print(as.data.frame(names(bisque_report)))
 ```
+
+```{r}
+# Fields of the Bisque result
+bisque_report %>%
+  summary() %>%
+  kable()
+```
+
 
 Bisque returns proportions 
 that sum to one:
@@ -538,51 +566,8 @@ visualize_and_save(fgcz_darm_bisque)
 ![](`r out_file("fgcz_darm_bisque_bars.png")`)
 
 
-Plot the cell type composition along
-the first two principal components.
-
-```{r}
-PC12 <- function(.) {
-  prcomp(t(.))$x %>%
-    as.data.frame() %>%
-    assert_fgcz_meta_order() %>%
-    cbind(s = fgcz_meta$Source) %>%
-    cbind(c = fgcz_meta$Condition) %>%
-    {
-      ggplot(., aes(x = PC1, y = PC2, color = s, shape = c)) +
-        geom_point() +
-        labs(
-          color = "Sample source",
-          shape = "Condition"
-        ) +
-        geom_point(size = 5) +
-        scale_color_brewer(palette = "Set1")
-    }
-}
-```
-
-```{r}
-PC12(fgcz_darm_bisque)
-```
-
-
 The cell type proportions [returned by Bisque](#fgcz_darm_bisque)
 vary rather more than expected.
-Let us introduce 
-the deviations from the average predicted profile
-along the first principal component
-as
-
-```{r}
-polarize_samples <-
-  function(deconvolved) {
-    prcomp(t(deconvolved))$x[, "PC1"] %>% {
-      # Ordered and centered at zero
-      2 * rank(.) / length(.) - 1
-    }
-  }
-```
-
 The samples come from four
 different hospitals 
 (the field `fgcz_meta$Source`),
@@ -595,16 +580,17 @@ Age could be another important factor.
 ```{r}
 PC1_versus <-
   function(., on_the_y_axis) {
-    polarize_samples(.) %>%
+    prcomp(t(.))$x %>%
+      as.data.frame() %>%
       assert_fgcz_meta_order() %>%
-      data.frame(
-        q = .,
-        r = fgcz_meta[[on_the_y_axis]],
-        c = fgcz_meta$"Condition",
-        s = fgcz_meta$"Source"
-      ) %>%
+      cbind(q = (2 * rank((.)$PC1) / length((.)$PC1) - 1)) %>%
+      cbind(c = fgcz_meta$Condition) %>%
+      cbind(s = fgcz_meta$Source) %>%
+      cbind(Age = fgcz_meta$Age) %>%
+      cbind(RIN = fgcz_meta$RIN) %>%
+      cbind(y = (.)[[on_the_y_axis]]) %>%
       {
-        ggplot(., aes(x = q, y = r, shape = c, color = s)) +
+        ggplot(., aes(x = q, y = y, shape = c, color = s)) +
           labs(
             x = "Deviation from the average composition (~PC1)",
             y = on_the_y_axis,
@@ -617,6 +603,13 @@ PC1_versus <-
   }
 ```
 
+Principal components of cell type proportions.
+
+```{r}
+fgcz_darm_bisque %>%
+  PC1_versus("PC2")
+```
+
 ```{r}
 fgcz_darm_bisque %>%
   PC1_versus("RIN")
@@ -628,9 +621,14 @@ fgcz_darm_bisque %>%
 ```
 
 
+
 #### MuSiC
 
-```{r}
+```{r, cache=TRUE}
+# Prevent errors from MuSiC
+exprs <- xbioc::exprs
+pVar <- xbioc::pVar
+
 music_report <-
   MuSiC::music_prop(
     bulk.eset = fgcz_eset,
@@ -639,9 +637,15 @@ music_report <-
     samples = names(darm_data)
   ) %>%
   suppressMessages()
-
-print(as.data.frame(names(music_report)))
 ```
+
+```{r}
+music_report %>%
+  summary() %>%
+  kable()
+```
+
+Estimate cell type proportions (celltype x sample).
 
 ```{r}
 fgcz_darm_music <- t(music_report$Est.prop.weighted)
@@ -654,9 +658,11 @@ visualize_and_save(fgcz_darm_music)
 ![](`r out_file("fgcz_darm_music_heat.png")`)
 ![](`r out_file("fgcz_darm_music_bars.png")`)
 
+Principal components of cell type proportions.
 
 ```{r}
-PC12(fgcz_darm_music)
+fgcz_darm_music %>%
+  PC1_versus("PC2")
 ```
 
 ```{r}
@@ -669,8 +675,17 @@ fgcz_darm_music %>%
   PC1_versus("Age")
 ```
 
+We would like to know
+whether there is 
+the cell type composition differs 
+in ALS vs Control samples.
+First,
+the following shows the distribution
+of the first principal component
+(of cell type proportions)
+separated by sample source.
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 fgcz_darm_music %>%
   {
     as.data.frame(prcomp(t(.))$x)
@@ -683,8 +698,13 @@ fgcz_darm_music %>%
     ggplot(., aes(x = PC1, fill = s, linetype = s)) +
       labs(fill = "Sample source") +
       guides(linetype = FALSE) +
-      geom_density(position = "identity", alpha = 0.4) +
-      geom_histogram(position = "dodge", bins = 20, aes(y = stat(density) / 5), color = 1, linetype = 1) +
+      geom_density(
+        position = "identity", alpha = 0.4
+      ) +
+      geom_histogram(
+        aes(y = stat(density) / 5),
+        position = "dodge", bins = 20, color = 1, linetype = 1
+      ) +
       hist_theme +
       theme(axis.text.y = element_blank()) +
       theme(
@@ -694,6 +714,11 @@ fgcz_darm_music %>%
       scale_fill_brewer(palette = "Set1")
   }
 ```
+
+**(IN PROGRESS)**
+
+
+
 
 ```{r, eval=FALSE}
 library(SingleCellExperiment)
@@ -766,6 +791,11 @@ visualize_and_save(fgcz_darm_nnls)
 
 ```{r}
 fgcz_darm_nnls %>%
+  PC1_versus("PC2")
+```
+
+```{r}
+fgcz_darm_nnls %>%
   PC1_versus("RIN")
 ```
 
@@ -823,7 +853,7 @@ abm1_eset <- Biobase::ExpressionSet(
 
 Deconvolution:
 
-```{r}
+```{r, cache=TRUE}
 bisque_report <-
   BisqueRNA::ReferenceBasedDecomposition(
     # BULK DATA
@@ -837,8 +867,6 @@ bisque_report <-
   )
 ```
 
-Order columns consistently with above attempt.
-  
 ```{r}
 bisque_report$bulk.props %>%
   visualize_and_save("fgcz_abm1_bisque")
