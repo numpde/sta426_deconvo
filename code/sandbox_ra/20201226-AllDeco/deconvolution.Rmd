@@ -123,12 +123,16 @@ suppressPackageStartupMessages({
   # install.packages("BisqueRNA")
   requireNamespace("BisqueRNA")
 
-  # # https://xuranw.github.io/MuSiC/articles/MuSiC.html
+  # According to https://github.com/meichendong/SCDC :
+  # install.packages("remotes")
+  # remotes::install_github("renozao/xbioc")
+  requireNamespace("xbioc") # For MuSiC and such
+  
+  # https://xuranw.github.io/MuSiC/articles/MuSiC.html
   # install.packages("devtools")
   # devtools::install_github("xuranw/MuSiC")
-  requireNamespace("xbioc") # For MuSiC
   requireNamespace("MuSiC")
-
+  
   # install.packages("kableExtra")
   requireNamespace("kableExtra")
 })
@@ -965,6 +969,7 @@ colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
 
 
 
+
 ### From Allen Brain M1 {.tabset .tabset-fade .tabset-pills}
 
 In this section we use
@@ -1083,12 +1088,18 @@ from bulk RNA-seq of the human brain,
 `r format(Sys.time(), '%Y-%m-%d')`,
 [http://bit.ly/deco_ra](http://bit.ly/deco_ra).
 
+
 ***
+
 
 
 ```{r include=FALSE}
 knitr::knit_exit()
 ```
+
+
+
+
 
 ## DWLS
 
@@ -1122,6 +1133,29 @@ y <- DWLS::DEAnalysisMAST(scdata = scdata_dummy, id = c("A", "B", "A", "B"), pat
 # Fails with:
 #  Error in .subset2(x, i, exact = exact) : invalid subscript type 'S4'
 ```
+
+
+
+#### SCDC
+
+```{r}
+# https://github.com/meichendong/SCDC
+# install.packages("devtools")
+# devtools::install_github("meichendong/SCDC")
+requireNamespace("SCDC")
+
+#any(rowSums(is.na(darm_eset@phenoData)) > 0)
+
+# https://meichendong.github.io/SCDC/articles/SCDC.html
+SCDC::SCDC_ENSEMBLE(
+  bulk.eset = fgcz_eset,
+  sc.eset.list = list(darmanis = darm_eset),
+  sample = "SubjectName",
+  ct.varname = "cellType",
+  ct.sub = c("astrocytes", "neurons")
+)
+```
+
 
 
 [//]: # XX -- TODO
