@@ -826,6 +826,52 @@ fgcz_darm_music.pca %>%
   kable()
 ```
 
+
+Ordering 
+the samples
+by the first principal component 
+reveals its meaning
+as a measure of 
+the content of astrocytes vs neurons.
+The samples from **Lo** suggest
+that high proportion of neurons
+is associated with ALS.
+
+```{r}
+fgcz_darm_music %>%
+  t() %>%
+  as.data.frame() %>%
+  assert_fgcz_meta_order() %>%
+  cbind(Source = fgcz_meta$Source) %>%
+  cbind(PC1 = fgcz_darm_music.pca$PC1) %>%
+  tibble::rownames_to_column("ID") %>%
+  mutate(ID = paste(ID, if_else(fgcz_meta$Condition == "ALS", "(ALS)", ""))) %>%
+  arrange(PC1) %>%
+  select(-PC1) %>%
+  group_by(Source) %>%
+  group_map(~{
+    (.x) %>%
+    tibble::column_to_rownames("ID") %>%
+    t() %>%
+    save_barchart(paste("fgcz_darm_music_", pull(.y), "_bars.png", sep=""))
+  }) %>%
+  invisible()
+```
+
+Lo:
+![](`r out_file("fgcz_darm_music_Lo_bars.png")`)
+
+NB:
+![](`r out_file("fgcz_darm_music_NB_bars.png")`)
+
+Ox:
+![](`r out_file("fgcz_darm_music_Ox_bars.png")`)
+
+PD:
+![](`r out_file("fgcz_darm_music_PD_bars.png")`)
+
+
+
 ```{r, eval=FALSE, echo=FALSE}
 # Permutation tests
 
@@ -1004,11 +1050,11 @@ if (!file.exists(out_file("fgcz_abm1_music_data.csv"))) {
 
   fgcz_abm1_music <-
     t(music_report.abm1$Est.prop.weighted)
-  
+
   fgcz_abm1_music %>%
     visualize_and_save("fgcz_abm1_music")
 } else {
-  fgcz_abm1_music <- 
+  fgcz_abm1_music <-
     from_csv(out_file("fgcz_abm1_music_data.csv"))
 }
 ```
