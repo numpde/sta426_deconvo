@@ -347,7 +347,7 @@ t(fgcz_data) %>%
   invisible()
 ```
 
-### Ref snRNA: Darmanis
+### Ref scRNA: Darmanis
 
 ```{r, cache=TRUE}
 darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
@@ -391,7 +391,7 @@ stopifnot(285 == ncol(darm_data))
 ```
 
 
-### Ref scRNA: Allen Brain M1
+### Ref snRNA: Allen Brain M1
 
 ```{r, cache=TRUE}
 abm1_meta <- from_csv(path_to("data/*/2019-AllenBrain-M1/b*/meta.csv*"))
@@ -595,7 +595,7 @@ visualize_and_save <-
       function(ext) paste(prefix, ext, sep = "_")
     }
 
-    (.)[, samples_order] %>%
+    (.)[order(tolower(rownames(.))), samples_order] %>%
       #
       save_heatmap(as("heat.png")) %>%
       save_barchart(as("bars.png")) %>%
@@ -1078,13 +1078,13 @@ if (!file.exists(out_file("fgcz_abm1_music_data.csv"))) {
 
   fgcz_abm1_music <-
     t(music_report.abm1$Est.prop.weighted)
-
-  fgcz_abm1_music %>%
-    visualize_and_save("fgcz_abm1_music")
 } else {
   fgcz_abm1_music <-
     from_csv(out_file("fgcz_abm1_music_data.csv"))
 }
+
+fgcz_abm1_music %>%
+  visualize_and_save("fgcz_abm1_music")
 ```
 
 
