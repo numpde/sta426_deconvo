@@ -2,8 +2,6 @@
 
 """
 Exploratory analysis of the FGCZ dataset.
-
-RA, 2020-11-30
 """
 
 
