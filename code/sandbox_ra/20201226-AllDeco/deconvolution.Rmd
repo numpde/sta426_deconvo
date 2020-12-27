@@ -1,7 +1,7 @@
 ---
 title: "Cell type deconvolution"
 author: "RA ([numpde](https://github.com/numpde/))"
-date: "2020-Dec-26"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output: 
   html_document:
     toc: true
@@ -53,16 +53,17 @@ different statistical properties of
 the technical noise 
 of bulk versus single-cell RNA-seq.
 
-As single-cell RNA (scRNA) cell type reference datasets we resort to
+As cell type reference datasets we resort to
+single-cell RNA-seq
+dataset
 [Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
-(about 400 cells)
+(~400 cells)
 and
+single-nucleus RNA-seq dataset
 [Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
 (>70k cells).
 The two are compared 
 [here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen).
-Note that Allen Brain M1 is from 
-[snRNA-seq](https://en.wikipedia.org/wiki/SnRNA-seq).
 
 **(in progress)**
 
@@ -342,7 +343,7 @@ t(fgcz_data) %>%
   invisible()
 ```
 
-### Ref scRNA: Darmanis
+### Ref snRNA: Darmanis
 
 ```{r, cache=TRUE}
 darm_data <- from_csv(path_to("data/*/2015-Darmanis/b*/data.csv.gz"))
@@ -987,42 +988,45 @@ bisque_report$bulk.props %>%
 
 #### MuSiC
 
-**(this subsection is in progress)**
+```{r, eval=T, cache=TRUE}
+# Read from disk if already available
+# otherwise it takes ages
+if (!file.exists(out_file("fgcz_abm1_music_data.csv"))) {
+  # MuSiC with ABM1
+  music_report.abm1 <-
+    MuSiC::music_prop(
+      bulk.eset = fgcz_eset,
+      sc.eset = abm1_eset,
+      clusters = abm1_meta$celltype,
+      samples = names(abm1_data)
+    ) %>%
+    suppressMessages()
 
-```{r, eval=F, cache=TRUE}
-stopifnot(!file.exists(out_file("fgcz_abm1_music.csv")))
-
-# MuSiC with ABM1
-music_report.abm1 <-
-  MuSiC::music_prop(
-    bulk.eset = fgcz_eset,
-    sc.eset = abm1_eset,
-    clusters = abm1_meta$celltype,
-    samples = names(abm1_data)
-  ) %>%
-  suppressMessages()
+  fgcz_abm1_music <-
+    t(music_report.abm1$Est.prop.weighted)
+  
+  fgcz_abm1_music %>%
+    visualize_and_save("fgcz_abm1_music")
+} else {
+  fgcz_abm1_music <- 
+    from_csv(out_file("fgcz_abm1_music_data.csv"))
+}
 ```
 
-```{r, eval=F}
-fgcz_abm1_music <-
-  t(music_report.abm1$Est.prop.weighted)
-```
 
-```{r, eval=F}
-fgcz_abm1_music %>%
-  visualize_and_save("fgcz_abm1_music")
-```
+![](`r out_file("fgcz_abm1_music_heat.png")`)
+![](`r out_file("fgcz_abm1_music_bars.png")`)
 
-```{r}
-# ![](`r out_file("fgcz_abm1_music_heat.png")`)
-# ![](`r out_file("fgcz_abm1_music_bars.png")`)
-```
 
+
+## Discussion
+
+(**in progress**)
 
 
 ## Acknowledgements
 
-(TODO)
+(**in progress**)
 
 
 ## Cite as
@@ -1030,7 +1034,7 @@ fgcz_abm1_music %>%
 RA, 
 Cell type deconvolution 
 from bulk RNA-seq of the human brain,
-December 2020,
+`r format(Sys.time(), '%Y-%m-%d')`,
 [http://bit.ly/deco_ra](http://bit.ly/deco_ra).
 
 ***
