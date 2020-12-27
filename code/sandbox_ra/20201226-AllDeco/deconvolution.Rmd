@@ -969,6 +969,29 @@ colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
 
 
 
+#### RNA-Sieve
+
+For the code see 
+[here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201226-RNASieve/a_deconvolution.py).
+
+
+```{r}
+fgcz_darm_sieve <-
+  path_to("code/*/*-RNASieve/a_*/celltypes.csv") %>%
+  from_csv() %>%
+  # `cell type` ~> `celltype`
+  fix_names()
+```
+
+```{r}
+visualize_and_save(fgcz_darm_sieve)
+```
+
+![](`r out_file("fgcz_darm_sieve_heat.png")`)
+![](`r out_file("fgcz_darm_sieve_bars.png")`)
+
+
+
 
 ### From Allen Brain M1 {.tabset .tabset-fade .tabset-pills}
 
