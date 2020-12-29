@@ -54,11 +54,13 @@ the technical noise
 of bulk versus single-cell RNA-seq.
 
 As cell type reference datasets we resort to
-single-cell RNA-seq
+the single-cell RNA-seq
 dataset
 [Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
 (~300 labeled cells used)
-and
+and,
+with even lesser success,
+the
 single-nucleus RNA-seq dataset
 [Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
 (>70k labeled cells).
@@ -67,8 +69,8 @@ The two are compared
 
 We apply the following packages/algorithms:
 
-- **Bisque**
-is an R package that prior to estimating 
+- **Bisque** (R)
+prior to estimating 
 cell type proportions transforms 
 the bulk gene expression gene-wise
 to match the distribution from
@@ -81,9 +83,9 @@ Links:
 [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
 [github](https://github.com/cozygene/bisque),
 [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
-(uses [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf))
+(uses [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)).
 
-- **MuSiC**
+- **MuSiC** (R)
 "up-weighs genes with low cross-subject variance" and vice versa,
 and
 recursively estimates the proportion of clusters of similar cell types
@@ -92,7 +94,7 @@ Links:
 [paper](https://www.nature.com/articles/s41467-018-08023-x),
 [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
 [github](https://github.com/xuranw/MuSiC),
-[music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
+[music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R).
 
 - **NNLS**
 is a barebones Python implementation 
@@ -101,9 +103,8 @@ using non-negative least squares.
 Links: 
 [code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
 
-- **RNA-Sieve**
-is a Python/Mathematica package
-that incorporates 
+- **RNA-Sieve** (Python/Mathematica)
+incorporates 
 the dependence
 of the observation noise on cell type composition
 of the bulk sample 
@@ -115,7 +116,7 @@ Links:
 [github](https://github.com/songlab-cal/rna-sieve),
 [code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201226-RNASieve/a_deconvolution.py).
 
-- **DWLS**
+- **DWLS** (R)
 identifies differentially expressed genes as markers
 and averages those 
 for each cell type.
@@ -128,7 +129,7 @@ Links:
 [github](https://github.com/dtsoucas/DWLS),
 [bitbucket](https://bitbucket.org/yuanlab/dwls/src/master/),
 [quickstart](https://github.com/dtsoucas/DWLS/blob/master/Manual.docx),
-[manual](https://bitbucket.org/yuanlab/dwls/src/master/manual.pdf),
+[manual](https://bitbucket.org/yuanlab/dwls/src/master/manual.pdf).
 
 
 This script:
