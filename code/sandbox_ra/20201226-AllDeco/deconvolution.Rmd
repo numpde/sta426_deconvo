@@ -57,37 +57,84 @@ As cell type reference datasets we resort to
 single-cell RNA-seq
 dataset
 [Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
-(~400 cells)
+(~300 labeled cells used)
 and
 single-nucleus RNA-seq dataset
 [Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
-(>70k cells).
+(>70k labeled cells).
 The two are compared 
 [here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen).
 
-**(in progress)**
+We apply the following packages/algorithms:
+
+- **Bisque**
+is an R package that prior to estimating 
+cell type proportions transforms 
+the bulk gene expression gene-wise
+to match the distribution from
+the reference dataset.
+It expects the reference single cells
+to come from several individuals.
+Links:
+[paper](https://www.nature.com/articles/s41467-020-15816-6),
+[vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
+[manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
+[github](https://github.com/cozygene/bisque),
+[ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
+(uses [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf))
+
+- **MuSiC**
+"up-weighs genes with low cross-subject variance" and vice versa,
+and
+recursively estimates the proportion of clusters of similar cell types
+using genes of low within-cluster variance.
+Links:
+[paper](https://www.nature.com/articles/s41467-018-08023-x),
+[tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
+[github](https://github.com/xuranw/MuSiC),
+[music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R)
+
+- **NNLS**
+is a barebones Python implementation 
+of cell type proportion reconstruction
+using non-negative least squares.
+Links: 
+[code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
+
+- **RNA-Sieve**
+is a Python/Mathematica package
+that incorporates 
+the dependence
+of the observation noise on cell type composition
+of the bulk sample 
+into the maximum likelihood estimator,
+and can also provide
+confidence intervals.
+Links:
+[preprint](https://doi.org/10.1101/2020.10.01.322867),
+[github](https://github.com/songlab-cal/rna-sieve),
+[code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201226-RNASieve/a_deconvolution.py).
+
+- **DWLS**
+identifies differentially expressed genes as markers
+and averages those 
+for each cell type.
+The absolute square residual 
+in the usual NLLS
+is replaced by a relative one,
+requiring an iterative procedure to find a minimizer.
+Links:
+[paper](https://www.nature.com/articles/s41467-019-10802-z),
+[github](https://github.com/dtsoucas/DWLS),
+[bitbucket](https://bitbucket.org/yuanlab/dwls/src/master/),
+[quickstart](https://github.com/dtsoucas/DWLS/blob/master/Manual.docx),
+[manual](https://bitbucket.org/yuanlab/dwls/src/master/manual.pdf),
 
 
-#### Pertinent links
+This script:
+[Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
+  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output).
 
-- [Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
-  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output) of this script.
-
-
-- Bisque 
-  [paper](https://www.nature.com/articles/s41467-020-15816-6),
-  [vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html),
-  [manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
-  [github](https://github.com/cozygene/bisque),
-  [ReferenceBasedDecomposition](https://rdrr.io/cran/BisqueRNA/src/R/reference_based.R)
-  (uses 
-  [limSolve](https://cran.r-project.org/web/packages/limSolve/limSolve.pdf)).
-
-- MuSiC
-  [paper](https://www.nature.com/articles/s41467-018-08023-x),
-  [tutorial](https://xuranw.github.io/MuSiC/articles/MuSiC.html),
-  [github](https://github.com/xuranw/MuSiC),
-  [music_prop](https://rdrr.io/github/xuranw/MuSiC/src/R/utils.R).
 
 
 
@@ -104,6 +151,8 @@ suppressPackageStartupMessages({
   requireNamespace("pheatmap")
   requireNamespace("stringr")
   requireNamespace("reshape2")
+  requireNamespace("purrr")
+  requireNamespace("pbapply")
 
   # avoid importing `exprs` that leads to clashes
   requireNamespace("rlang")
@@ -127,12 +176,18 @@ suppressPackageStartupMessages({
   # install.packages("remotes")
   # remotes::install_github("renozao/xbioc")
   requireNamespace("xbioc") # For MuSiC and such
-  
+
   # https://xuranw.github.io/MuSiC/articles/MuSiC.html
   # install.packages("devtools")
   # devtools::install_github("xuranw/MuSiC")
   requireNamespace("MuSiC")
-  
+
+  # BiocManager::install("MAST")
+  # remotes::install_bitbucket("yuanlab/dwls")
+  requireNamespace("ROCR")
+  requireNamespace("MAST")
+  requireNamespace("DWLS")
+
   # install.packages("kableExtra")
   requireNamespace("kableExtra")
 })
@@ -224,6 +279,10 @@ to_csv <- function(., f) {
 ```
 
 ### Plotting
+
+```{r}
+hush <- base::invisible
+```
 
 ```{r}
 ggplot2::theme_set(theme_light(base_size = 15))
@@ -344,7 +403,7 @@ assert_fgcz_meta_order <-
 ```{r}
 t(fgcz_data) %>%
   assert_fgcz_meta_order() %>%
-  invisible()
+  hush()
 ```
 
 ### Ref scRNA: Darmanis
@@ -419,7 +478,7 @@ abm1_data <-
   {
     (.)[rownames(.) %in% rownames(fgcz_data), ]
   } %>%
-  # Drop zero columns (dplyr variant too slow)
+  # Drop zero columns (dplyr variant is too slow here)
   {
     (.)[, colSums(.) != 0]
   }
@@ -589,11 +648,9 @@ visualize inferred cell type composition
 by bulk sample.
 
 ```{r}
-visualize_and_save <-
+save_heat_bars_data <-
   function(., prefix = deparse(substitute(.))) {
-    as <- {
-      function(ext) paste(prefix, ext, sep = "_")
-    }
+    as <- (function(ext) paste(prefix, ext, sep = "_"))
 
     (.)[order(tolower(rownames(.))), samples_order] %>%
       #
@@ -607,7 +664,7 @@ visualize_and_save <-
 ```
 
 ```{r}
-visualize_and_save(fgcz_darm_bisque)
+save_heat_bars_data(fgcz_darm_bisque) %>% hush()
 ```
 
 ![](`r out_file("fgcz_darm_bisque_heat.png")`)
@@ -626,45 +683,84 @@ to the [RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
 Age could be another important factor.
 
 ```{r}
-PC1_versus <-
-  function(., on_the_y_axis) {
-    prcomp(t(.))$x %>%
+PC1_and_friends <-
+  function(.) {
+    plots <-
+      prcomp(t(.))$x %>%
       as.data.frame() %>%
       assert_fgcz_meta_order() %>%
       cbind(fgcz_meta) %>%
-      cbind(q = (2 * rank((.)$PC1) / length((.)$PC1) - 1)) %>%
-      cbind(y = (.)[[on_the_y_axis]]) %>%
+      cbind(y = (2 * rank((.)$PC1) / length((.)$PC1) - 1)) %>%
       {
-        ggplot(., aes(x = q, y = y, shape = Condition, color = Source)) +
-          labs(
-            x = "Deviation from the average composition (~PC1)",
-            y = on_the_y_axis,
-            color = "Sample source",
-            shape = "Condition"
-          ) +
-          geom_point(size = 5, alpha = 0.2 + abs((.)$q)) +
-          scale_color_brewer(palette = "Set1")
+        # Make several plots silently
+        lapply(
+          c("PC2", "RIN", "Age"),
+          function(field) {
+            cbind((.), x = (.)[[field]]) %>% {
+              ggplot(., aes(x = x, y = y, shape = Condition, color = Source)) +
+                labs(
+                  x = field,
+                  y = "Deviation from the average composition (~PC1)",
+                  color = "Sample source",
+                  shape = "Condition"
+                ) +
+                geom_point(size = 5, alpha = 0.2 + abs((.)$y)) +
+                scale_color_brewer(palette = "Set1")
+            }
+          }
+        )
       }
+
+    t <- theme(
+      legend.position = "none",
+      axis.title.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_blank(),
+    )
+
+    filename <- out_file(paste(
+      deparse(substitute(.)),
+      paste(lapply(plots, function(plot) plot$labels$x), collapse = "_"),
+      "vs__PC1.png",
+      sep = "__"
+    ))
+
+    plots <- gridExtra::arrangeGrob(
+      grobs = c(
+        # Remove redundant stuff
+        lapply(plots, function(.) (. + t)),
+        # but keep one legend
+        list(cowplot::get_legend(plots[[1]]))
+      ),
+      # All grobs in one row
+      nrow = 1,
+      # Y-axis label
+      left = grid::grid.text(
+        plots[[1]]$labels$y,
+        rot = 90,
+        draw = FALSE,
+        gp = grid::gpar(fontsize = ggplot2::theme_get()$text$size)
+      )
+    )
+
+    ggsave(
+      filename = filename,
+      plot = plots,
+      width = WIDTH1,
+      height = WIDTH1 / (length(plots) - 1)
+    )
+
+    return(filename)
   }
 ```
 
-Principal components of cell type proportions.
+Principal components of cell type proportions, etc.
 
 ```{r}
-fgcz_darm_bisque %>%
-  PC1_versus("PC2")
+PC1_and_friends(fgcz_darm_bisque) %>% hush()
 ```
 
-```{r}
-fgcz_darm_bisque %>%
-  PC1_versus("RIN")
-```
-
-```{r}
-fgcz_darm_bisque %>%
-  PC1_versus("Age")
-```
-
+![](`r out_file("fgcz_darm_bisque__PC2_RIN_Age__vs__PC1.png")`)
 
 
 #### MuSiC
@@ -700,28 +796,15 @@ fgcz_darm_music <-
 ```
 
 ```{r}
-visualize_and_save(fgcz_darm_music)
+save_heat_bars_data(fgcz_darm_music) %>% hush()
+PC1_and_friends(fgcz_darm_music) %>% hush()
 ```
 
 ![](`r out_file("fgcz_darm_music_heat.png")`)
 ![](`r out_file("fgcz_darm_music_bars.png")`)
 
-Principal components of cell type proportions.
+![](`r out_file("fgcz_darm_music__PC2_RIN_Age__vs__PC1.png")`)
 
-```{r}
-fgcz_darm_music %>%
-  PC1_versus("PC2")
-```
-
-```{r}
-fgcz_darm_music %>%
-  PC1_versus("RIN")
-```
-
-```{r}
-fgcz_darm_music %>%
-  PC1_versus("Age")
-```
 
 We would like to know
 whether there is 
@@ -795,7 +878,7 @@ fgcz_darm_music.pca %>%
     width = WIDTH1,
     height = WIDTH1 / 4
   ) %>%
-  invisible()
+  hush()
 ```
 
 ![](`r out_file("fgcz_darm_music_PC1.png")`)
@@ -853,13 +936,13 @@ fgcz_darm_music %>%
   arrange(PC1) %>%
   select(-PC1) %>%
   group_by(Source) %>%
-  group_map(~{
+  group_map(~ {
     (.x) %>%
-    tibble::column_to_rownames("ID") %>%
-    t() %>%
-    save_barchart(paste("fgcz_darm_music_", pull(.y), "_bars.png", sep=""))
+      tibble::column_to_rownames("ID") %>%
+      t() %>%
+      save_barchart(paste("fgcz_darm_music_", pull(.y), "_bars.png", sep = ""))
   }) %>%
-  invisible()
+  hush()
 ```
 
 Lo:
@@ -905,27 +988,15 @@ fgcz_darm_nnls <-
 ```
 
 ```{r}
-visualize_and_save(fgcz_darm_nnls)
+save_heat_bars_data(fgcz_darm_nnls) %>% hush()
+PC1_and_friends(fgcz_darm_nnls) %>% hush()
 ```
 
 ![](`r out_file("fgcz_darm_nnls_heat.png")`)
 ![](`r out_file("fgcz_darm_nnls_bars.png")`)
 
+![](`r out_file("fgcz_darm_nnls__PC2_RIN_Age__vs__PC1.png")`)
 
-```{r}
-fgcz_darm_nnls %>%
-  PC1_versus("PC2")
-```
-
-```{r}
-fgcz_darm_nnls %>%
-  PC1_versus("RIN")
-```
-
-```{r}
-fgcz_darm_nnls %>%
-  PC1_versus("Age")
-```
 
 
 These results are similar enough to MuSiC's
@@ -936,37 +1007,45 @@ and plot a histogram of those
 separated by sample source.
 
 ```{r}
-# Check that samples are arranged consistently
-stopifnot(all(colnames(fgcz_darm_music) == colnames(fgcz_darm_nnls)))
-stopifnot(all(rownames(fgcz_darm_music) == rownames(fgcz_darm_nnls)))
+similarity_plot <- function(X1, X2) {
+  X1 <- X1[order(rownames(X1)), order(colnames(X1))]
+  X2 <- X2[order(rownames(X2)), order(colnames(X2))]
+  
+  # Check that samples are arranged consistently
+  stopifnot(all(colnames(X1) == colnames(X2)))
+  stopifnot(all(rownames(X1) == rownames(X2)))
 
-colSums(col_norm2(fgcz_darm_music) * col_norm2(fgcz_darm_nnls)) %>%
-  data.frame(
-    x = .,
-    s = fgcz_meta$Source
-  ) %>%
-  {
-    ggplot(., aes(x = x, fill = s, linetype = s)) +
-      labs(fill = "Sample source") +
-      labs(x = "Cosine similarity of a sample (NNLS vs MuSiC)") +
-      guides(linetype = FALSE) +
-      geom_density(
-        position = "identity", alpha = 0.4
-      ) +
-      geom_histogram(
-        aes(y = stat(density) / 5),
-        position = "dodge", bins = 30, color = 1, linetype = 1,
-      ) +
-      hist_theme +
-      theme(axis.text.y = element_blank()) +
-      theme(
-        panel.grid.major.y = element_blank(),
-        panel.grid.minor.y = element_blank(),
-      ) +
-      scale_fill_brewer(palette = "Set1")
-  }
+  colSums(col_norm2(X1) * col_norm2(X2)) %>%
+    data.frame(
+      x = .,
+      s = fgcz_meta$Source
+    ) %>%
+    {
+      ggplot(., aes(x = x, fill = s, linetype = s)) +
+        labs(fill = "Sample source") +
+        guides(linetype = FALSE) +
+        geom_density(
+          position = "identity", alpha = 0.4
+        ) +
+        geom_histogram(
+          aes(y = stat(density) / 5),
+          position = "dodge", bins = 30, color = 1, linetype = 1,
+        ) +
+        hist_theme +
+        theme(axis.text.y = element_blank()) +
+        theme(
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+        ) +
+        scale_fill_brewer(palette = "Set1")
+    }
+}
 ```
 
+```{r}
+similarity_plot(fgcz_darm_music, fgcz_darm_nnls) +
+  labs(x = "Cosine similarity of a sample (MuSiC vs NNLS)")
+```
 
 
 #### RNA-Sieve
@@ -979,17 +1058,90 @@ For the code see
 fgcz_darm_sieve <-
   path_to("code/*/*-RNASieve/a_*/celltypes.csv") %>%
   from_csv() %>%
-  # `cell type` ~> `celltype`
   fix_names()
 ```
 
 ```{r}
-visualize_and_save(fgcz_darm_sieve)
+save_heat_bars_data(fgcz_darm_sieve) %>% hush()
+PC1_and_friends(fgcz_darm_sieve) %>% hush()
 ```
 
 ![](`r out_file("fgcz_darm_sieve_heat.png")`)
 ![](`r out_file("fgcz_darm_sieve_bars.png")`)
 
+![](`r out_file("fgcz_darm_sieve__PC2_RIN_Age__vs__PC1.png")`)
+
+
+```{r}
+similarity_plot(fgcz_darm_music, fgcz_darm_sieve) +
+  labs(x = "Cosine similarity of a sample (MuSiC vs RNA-Sieve)")
+```
+
+
+
+#### DWLS
+
+This preprocesses the reference dataset.
+
+```{r, cache=TRUE, results='hide', message=FALSE}
+# This takes some 20min
+
+prediction <- ROCR::prediction
+performance <- ROCR::performance
+zlm <- MAST::zlm
+
+dwls_darm_signature <-
+  DWLS::buildSignatureMatrixMAST(
+    scdata = darm_data,
+    id = setNames(as.list(darm_meta[["celltype"]]), rownames(darm_meta)),
+    path = out_file("dwls_darm_signature/")
+  )
+```
+
+This applies deconvolution
+to each bulk sample.
+
+```{r, cache=TRUE}
+fgcz_darm_dwls <-
+  fgcz_data %>%
+  {
+    genes <- intersect(rownames(dwls_darm_signature), rownames(.))
+
+    pbapply::pblapply(
+      (.)[genes, ],
+      function(sample) {
+        # Silence silly printout
+        purrr::quietly(DWLS::solveDampenedWLS)(
+          as.matrix(dwls_darm_signature[genes, ]), as.matrix(sample)
+        )$result
+      },
+      # Parallel processes -- requires (cl x RAM)
+      cl = 1
+    )
+  } %>%
+  as.data.frame(check.names = F)
+```
+
+```{r}
+fgcz_darm_dwls  <- 
+  fgcz_darm_dwls %>%
+  {fgcz_darm_dwls[order(tolower(rownames(.))), ]}
+```
+
+```{r}
+fgcz_darm_dwls %>%
+  save_heat_bars_data("fgcz_darm_dwls") %>%
+  hush()
+```
+
+![](`r out_file("fgcz_darm_dwls_heat.png")`)
+![](`r out_file("fgcz_darm_dwls_bars.png")`)
+
+
+```{r}
+similarity_plot(fgcz_darm_music, fgcz_darm_dwls) +
+  labs(x = "Cosine similarity of a sample (MuSiC vs DWLS)")
+```
 
 
 
@@ -1004,7 +1156,7 @@ as the reference dataset.
 Repackage:
 
 ```{r, eval=FALSE, echo=FALSE}
-# # HACK
+# # HACK TO SPEED UP
 # a <- unique(abm1_meta$donor)[1]
 # b <- unique(abm1_meta$donor)[2]
 # a <- rownames(abm1_meta[abm1_meta$donor == a, ])[1:10]
@@ -1053,7 +1205,8 @@ bisque_report <-
 
 ```{r}
 bisque_report$bulk.props %>%
-  visualize_and_save("fgcz_abm1_bisque")
+  save_heat_bars_data("fgcz_abm1_bisque") %>%
+  hush()
 ```
 
 ![](`r out_file("fgcz_abm1_bisque_heat.png")`)
@@ -1062,7 +1215,7 @@ bisque_report$bulk.props %>%
 
 #### MuSiC
 
-```{r, eval=T, cache=TRUE}
+```{r, cache=TRUE}
 # Read from disk if already available
 # otherwise it takes ages
 if (!file.exists(out_file("fgcz_abm1_music_data.csv"))) {
@@ -1084,9 +1237,9 @@ if (!file.exists(out_file("fgcz_abm1_music_data.csv"))) {
 }
 
 fgcz_abm1_music %>%
-  visualize_and_save("fgcz_abm1_music")
+  save_heat_bars_data("fgcz_abm1_music") %>%
+  hush()
 ```
-
 
 ![](`r out_file("fgcz_abm1_music_heat.png")`)
 ![](`r out_file("fgcz_abm1_music_bars.png")`)
@@ -1115,51 +1268,13 @@ from bulk RNA-seq of the human brain,
 ***
 
 
-
 ```{r include=FALSE}
 knitr::knit_exit()
 ```
 
 
 
-
-
-## DWLS
-
-```{r}
-# https://github.com/dtsoucas/DWLS/blob/master/Manual.docx
-BiocManager::install("MAST")
-remotes::install_bitbucket("yuanlab/dwls")
-requireNamespace("DWLS")
-```
-
-```{r}
-x <- MAST::FromMatrix(
-  exprsArray = as.matrix(darm_data),
-  cData = darm_meta,
-  class = "SingleCellAssay",
-  check_sanity = FALSE
-)
-
-x <-
-  DWLS::buildSignatureMatrixMAST(
-    scdata = as.matrix(darm_data),
-    id = setNames(as.list(darm_meta[["celltype"]]), rownames(darm_meta))
-  )
-
-require("ROCR")
-require("MAST")
-scdata_dummy <- matrix(sample.int(100, size = 4 * 15, replace = T), nrow = 5, ncol = 4)
-rownames(scdata_dummy) <- paste("Gene", 1:nrow(scdata_dummy), sep = "")
-colnames(scdata_dummy) <- paste("Cell", 1:ncol(scdata_dummy), sep = "")
-y <- DWLS::DEAnalysisMAST(scdata = scdata_dummy, id = c("A", "B", "A", "B"), path = "./here.dat")
-# Fails with:
-#  Error in .subset2(x, i, exact = exact) : invalid subscript type 'S4'
-```
-
-
-
-#### SCDC
+#### SCDC -- couldn't get it to work
 
 ```{r}
 # https://github.com/meichendong/SCDC
@@ -1167,7 +1282,13 @@ y <- DWLS::DEAnalysisMAST(scdata = scdata_dummy, id = c("A", "B", "A", "B"), pat
 # devtools::install_github("meichendong/SCDC")
 requireNamespace("SCDC")
 
-#any(rowSums(is.na(darm_eset@phenoData)) > 0)
+# SCDC fails with:
+#
+# Error in y[y < q15] <- q15[y < q15] :
+#   NAs are not allowed in subscripted assignments
+# In addition: There were 50 or more warnings:
+# ...
+# 50: In FUN(newX[, i], ...) : no non-missing arguments to max; returning -Inf
 
 # https://meichendong.github.io/SCDC/articles/SCDC.html
 SCDC::SCDC_ENSEMBLE(
@@ -1181,7 +1302,7 @@ SCDC::SCDC_ENSEMBLE(
 
 
 
-[//]: # XX -- TODO
+[//]: # XX 
 
 ```{r, eval=FALSE, echo=FALSE}
 library(SingleCellExperiment)
