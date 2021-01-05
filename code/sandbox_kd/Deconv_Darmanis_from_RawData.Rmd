@@ -1,0 +1,389 @@
+#Cell-type deconvolution
+
+**Set up the environment and import libraries**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+rm(list = ls())
+library(dplyr)
+library(MASS)
+library(tidyverse)
+library(edgeR)
+library(limma)
+library(devtools)
+library(markerGeneProfile)
+library(dtangle)
+library(glmnet)
+library(MineICA)
+library(amritr)
+library(mixOmics)
+library(preprocessCore)
+library(DSA)
+library(UpSetR)
+library(GEOquery)
+library(reshape2)
+library(pheatmap)
+library(RColorBrewer)
+```
+
+***
+
+##Exploratory data analysis of the data
+
+**Loading of the data**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+data <- read.table('Count_QC-raw-count.txt', sep = '\t', header = TRUE)
+
+data_unique <- data[-c(8382, 5347, 21408, 21409, 21406, 3914, 21412, 21412, 21402, 21403, 21410, 20201, 21399,10000,21404,
+                       21463, 5918, 21407, 3036, 8486, 21398, 7989, 21400, 2706, 21401, 21405, 6682, 7324, 21461, 1982,
+                       21051, 21462, 21411, 3706),]
+
+rownames(data_unique) <- data_unique[,2]
+
+data_unique <- data_unique[,3:ncol(data_unique)]
+```
+
+***
+
+**Data exploration**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+group <- c(rep(1,52),rep(2,50))
+group2 <- c(rep('ALS',52),rep('Control',50))
+
+y <- DGEList(counts = data_unique, group = group)
+
+keep <- filterByExpr(y)
+
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+y <- calcNormFactors(y)
+
+y2 <- cpm(y, log = T)
+
+plotMDS(y, col = c('tomato', 'cornflowerblue')[as.factor(group)])
+legend(1.1, -0.9, legend=c("ALS", "Control"),col=c("tomato", "cornflowerblue"),
+       lty = 1:1, bty = "n", cex=1)
+```
+
+***
+
+**Estimation of the dispersion**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+design <- model.matrix(~factor(group))
+
+y <- estimateDisp(y, design)
+
+plotBCV(y)
+```
+
+***
+
+**Analysis of the differential expression**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+fit <- glmFit(y,design)
+
+lrt <- glmLRT(fit)
+
+#topTags(lrt)
+#top_order <- order(lrt$table$PValue)
+#cpm(y)[top_order[1:10],]
+
+summary(decideTests(lrt))
+
+plotMD(lrt)
+```
+
+***
+
+**Visualization of the expression values**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+y_df <- as.data.frame(y)
+rownames(y_df) <- rownames(y)
+df_reshaped <- melt(round(log1p(y_df[,1:102]),2), value.name = "value")
+
+ggplot(df_reshaped, aes(x = variable, y = value)) +
+  geom_violin(aes(fill = variable) ,trim = T) +
+  ggtitle("Violin plots of the expression values") +
+  theme_light(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 90, size = 4),
+        legend.position = 'none')
+```
+
+***
+
+**Principal component analysis**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+pca <- prcomp(t(y2), scale = F)
+var_explained <- pca$sdev^2/sum(pca$sdev^2)
+
+pca$x %>% 
+  as.data.frame %>%
+  ggplot(aes(x=PC1,y=PC2, group = group)) + 
+  geom_point(aes(x=PC1,y=PC2,colour=factor(group2)),size=2) +
+  theme_light(base_size = 20) + 
+  labs(x=paste0("PC1: ",round(var_explained[1]*100,1),"%"),
+       y=paste0("PC2: ",round(var_explained[2]*100,1),"%"),
+       color = "Groups") +
+  scale_fill_discrete(name = "Groups", labels = c("ALS", "Control")) +
+  ggtitle('Principal Component Analysis')
+```
+
+***
+
+**Visualization of the top 500 genes with clustered heatmap**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+top_genes <- rownames(topTags(lrt, n = 500))
+
+y_df2 <- y_df[row_number(top_genes),]
+rownames(y_df2) <- top_genes
+
+pheatmap(y_df2, scale = 'row', cluster_rows = F,show_rownames = F,
+         fontsize_col = 4)
+```
+
+***
+
+**Distance between samples**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+sampleDists <- dist(t(y_df2), method = "euclidean")
+sampleDistMatrix <- as.matrix(sampleDists)
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors,
+         fontsize_row = 4,
+         fontsize_col = 4)
+```
+
+***
+***
+
+##Prepocessing and analysis of the data
+
+**Load the data of expression values**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+data <- read.table('Count_QC-raw-count.txt', sep = '\t', header = TRUE)
+data_unique <- data[-c(8382, 5347, 21408, 21409, 21406, 3914, 21412, 21412, 21402, 21403, 21410, 20201, 21399,10000,21404,
+                       21463, 5918, 21407, 3036, 8486, 21398, 7989, 21400, 2706, 21401, 21405, 6682, 7324, 21461, 1982,
+                       21051, 21462, 21411, 3706),]
+
+rownames(data_unique) <- data_unique[,2]
+data_unique <- data_unique[,3:ncol(data_unique)]
+```
+
+**Filter and Normalize the data**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+group <- c(rep(1,52),rep(2,50))
+dge <- DGEList(counts = data_unique, group = group)
+
+keep <- filterByExpr(dge)
+dge <- dge[keep, , keep.lib.sizes=FALSE]
+
+geneExpr <- cpm(dge)
+geneExpr <- as.data.frame(geneExpr)
+```
+
+***
+***
+
+**Load the data of maker genes**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+data <- getGEO('GSE67835')
+data1 <- data$`GSE67835-GPL15520_series_matrix.txt.gz`
+data2 <- data$`GSE67835-GPL18573_series_matrix.txt.gz`
+
+data1 <- pData(data1)
+data2 <- pData(data2)
+
+raw <- read.csv('data.csv', header = TRUE, sep = '\t')
+rownames(raw) <- raw[,1]
+raw <- raw[,-1]
+raw <- as.data.frame(raw)
+
+raw2 <- raw
+colnames(raw2)[1:121] <- data2[1:121,45]
+colnames(raw2)[122:135] <- data1[122:135,45]
+colnames(raw2)[136:313] <- data2[136:313,45]
+colnames(raw2)[314:437] <- data1[314:437,45]
+colnames(raw2)[438:466] <- data2[438:466,45]
+
+raw_filt <- raw2[,which(colnames(raw2) %in% c('oligodendrocytes','astrocytes','OPC','microglia','neurons','endothelial'))]
+colnames(raw_filt) <- colnames(raw2)[which(colnames(raw2) %in% c('oligodendrocytes','astrocytes','OPC','microglia','neurons','endothelial'))]
+
+raw3 <- raw[,which(colnames(raw2) %in% c('oligodendrocytes','astrocytes','OPC','microglia','neurons','endothelial'))]
+```
+
+**Look for top differentially expressed genes**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+commongenes <- intersect(rownames(geneExpr), rownames(raw_filt))
+
+dge2 <- DGEList(counts = raw_filt[commongenes,])
+
+dge2 <- calcNormFactors(dge2)
+
+ref_markers <- cpm(dge2)
+
+markers_mean = sapply(unique(colnames(raw_filt)),function(x)rowMeans(raw_filt[,which(colnames(raw_filt)==x)]))
+
+h <- as.data.frame(colnames(raw_filt))
+
+rownames(h) <- colnames(raw3)
+
+colnames(h) <- "cell_type"
+
+f <- paste(colnames(h),colnames(raw_filt), sep = "_")
+
+design <- model.matrix(~0+f)
+
+rownames(design) <- rownames(h)
+
+colnames(design) <- unique(f)
+
+commongenes2 = intersect(rownames(geneExpr),rownames(markers_mean))
+
+voom_matrix <- voom(raw[commongenes2,rownames(design)], design)
+
+fit <- lmFit(voom_matrix, design)
+
+contrast_name <- sapply(colnames(design),function(x)paste(x,'-(',paste(colnames(design)[colnames(design)!=x],collapse = "+"),')/5',sep = ''))
+
+contrast <- makeContrasts(contrasts = contrast_name, levels = colnames(design))
+
+fit2  <- contrasts.fit(fit, contrast)
+
+fit2  <- eBayes(fit2)
+
+d_test <- (decideTests(fit2) != 0)+0
+d_test <- as.data.frame(d_test)
+colnames(d_test) <- c("Oligodendrocytes", "Astrocytes", "OPC", "Microglia", "Neurons", "Endothelial")
+upset(d_test)
+```
+
+**Select the 100 top differentially expressed genes per cell type**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+gene_markers <- NULL
+for(i in 1:ncol(design)){
+  x <- fit2$coef[p.adjust(fit2$p.v[,i],'fdr')<0.05,i]
+  gene_markers[[colnames(design)[i]]] <-  names(head(sort(-x[x>0]),100))
+}
+unlist(lapply(gene_markers,length))
+```
+
+***
+***
+
+##Cell-type deconvolution
+
+**Deconvolution with dtangle**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+commongenes3 <- intersect(rownames(geneExpr), rownames(markers_mean))
+
+geneExpr2 <- geneExpr[pmatch(commongenes3, rownames(geneExpr)),]
+markers_mean2 <- markers_mean[pmatch(commongenes3, rownames(markers_mean)),]
+
+Y <- cbind(markers_mean2, geneExpr2)
+
+Y <- DGEList(counts=Y)
+Y <- calcNormFactors(Y,method = 'TMM')
+Y <- cpm(Y, log=FALSE)
+
+pure_samples <- as.list(1:6)
+names(pure_samples) <- colnames(Y)[1:6]
+
+dtDarmanis <- dtangle(log1p(t(Y)), pure_samples = pure_samples, markers = gene_markers)$estimates
+```
+***
+**Visualization of the cell types' proportions**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+dt <- t(dtDarmanis)
+dt <- dt[,-c(1:6)]
+
+#par(mfrow = c(2,1))
+par(mar = c(8,5,5,10))
+barplot(dt[,1:52], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "ALS")
+barplot(dt[,53:102], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "Control")
+```
+
+***
+***
+
+**Deconvolution with non-negative least-squares**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+dat <- t(Y[unlist(gene_markers),])
+lsDarmanis <- apply(dat[-c(1:6),],1,function(x) coef(glmnet(t(dat[1:6,unlist(gene_markers)]),x,lambda = 0, lower.limits = 0,intercept = F,standardize = F))[-1,])
+lsDarmanis <- t(lsDarmanis)/colSums(lsDarmanis)
+```
+***
+**Visualization of the cell types' proportions**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+ls <- t(lsDarmanis)
+
+lsDarmanis_t <- t(lsDarmanis)
+# par(mfrow = c(2,1))
+par(mar = c(8,5,5,10))
+barplot(lsDarmanis_t[1:6,1:52], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "ALS")
+barplot(lsDarmanis_t[1:6,53:102], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "Control")
+```
+
+***
+***
+
+**Deconvolution with cibersort**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+new_y <- Y[unlist(gene_markers),-c(1:6)]
+new_y2 <- Y[unlist(gene_markers),1:6]
+new_y2 <- (new_y2 - mean(new_y2))/sd(as.vector(new_y2))
+
+csDarmanis <- sapply(as.data.frame(new_y),function(z) CoreAlg(new_y2,(z - mean(z))/sd(z))$w)
+rownames(csDarmanis) <- colnames(new_y2)
+
+csDarmanis2 <- csDarmanis[,-c(1:6)]
+```
+***
+**Visualization of the cell types' proportions**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+#par(mfrow = c(2,1))
+par(mar = c(8,5,5,10))
+barplot(csDarmanis[1:6,1:52], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "ALS")
+barplot(csDarmanis[1:6,53:102], col = c("lightblue", "lightcyan", "lavender", "mistyrose",  "cornsilk", "lightsalmon"),legend.text = T, cex.names = 0.75, args.legend = list(x = "right", bty="n", inset=c(-0.35,0), xpd = TRUE), main = "Control")
+```
+
+***
+***
+
+**Statisical significance of the cell-types between the conditions**
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+test1 <- list()
+for (i in 1:nrow(dt)) {
+  ttest <- t.test(dt[i,1:52],dt[i,53:102])$p.value
+  test1 <- append(test1, ttest)
+}
+names(test1) <- rownames(dt)
+
+test2 <- list()
+for (i in 1:nrow(ls)) {
+  ttest <- t.test(ls[i,1:52],ls[i,53:102])$p.value
+  test2 <- append(test2, ttest)
+}
+names(test2) <- rownames(ls)
+
+test3 <- list()
+for (i in 1:nrow(csDarmanis)) {
+  ttest <- t.test(csDarmanis[i,1:52],csDarmanis[i,53:102])$p.value
+  test3 <- append(test3, ttest)
+}
+names(test3) <- rownames(csDarmanis)
+
+df <- as.data.frame(matrix(unlist(test1), nrow=length(test1), byrow = T))
+df$V2 <- matrix(unlist(test2), nrow=length(test2), byrow = T)
+df$V3 <- matrix(unlist(test3), nrow=length(test3), byrow = T)
+df <- t(df)
+colnames(df) <- c("Oligodendrocytes", "Astrocytes", "OPC", "Microglia", "Neurons", "Endothelial")
+rownames(df) <- c("dtangle", "NNLS", "cibersort")
+knitr::kable(df, format = "simple", align = "cccccc")
+```
+
+
+
+
+
+
