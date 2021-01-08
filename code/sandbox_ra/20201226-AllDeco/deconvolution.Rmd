@@ -16,8 +16,7 @@ editor_options:
 We investigate
 a dataset of 102 bulk [RNA-seq](https://en.wikipedia.org/wiki/RNA-Seq) samples
 extracted from the prefrontal cortex
-of 102 deceased individuals
-([overview](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201130-FirstLook)).
+of 102 deceased individuals.
 The dataset is provided by 
 H Rehrauer of FGCZ
 ([details](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)).
@@ -53,19 +52,18 @@ different statistical properties of
 the technical noise 
 of bulk versus single-cell RNA-seq.
 
-As cell type reference datasets we resort to
+As for cell type reference datasets we resort to
 
 - the single-cell RNA-seq dataset
 [Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
-(~300 labeled cells used)
+(~300 labeled cells used),
+and to
 
-and
-
-- to the single-nucleus RNA-seq dataset
+- the single-nucleus RNA-seq dataset
 [Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
 (>70k labeled cells).
 
-The two are compared 
+The two datasets are compared 
 [here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen).
 
 We apply the following packages/algorithms:
@@ -132,18 +130,15 @@ Links:
 [quickstart](https://github.com/dtsoucas/DWLS/blob/master/Manual.docx),
 [manual](https://bitbucket.org/yuanlab/dwls/src/master/manual.pdf).
 
-
-We were unable to run 
+- We were unable to run 
 [SCDC](https://meichendong.github.io/SCDC/articles/SCDC.html).
 
 
-Finally,
+This script:
 
-- [source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco)
+- [source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
 
-- [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output)
-
-of this script.
+- [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output).
 
 
 ## Preliminaries {.tabset .tabset-fade .tabset-pills}
@@ -211,10 +206,6 @@ suppressPackageStartupMessages({
 
 
 ### Session info
-
-```{r}
-
-```
 
 ```{r, echo=FALSE}
 sessionInfo()
@@ -428,7 +419,6 @@ t(fgcz_data) %>%
   hush()
 ```
 
-
 ### Ref scRNA: Darmanis
 
 ```{r, cache=TRUE}
@@ -554,6 +544,44 @@ abm1_markergenes <-
 stopifnot(117 == length(abm1_markergenes))
 ```
 
+
+## Exploratory 
+
+### FGCZ bulk RNA-seq {.tabset .tabset-fade .tabset-pills}
+
+Some exploratory cross-sections of the dataset
+can be found
+[here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201130-FirstLook).
+
+Of particular interest for the following 
+are 
+[RIN](https://en.wikipedia.org/wiki/RNA_integrity_number)
+and post-mortem delay.
+They exhibit a dependence on the source
+but appear to be uncorrelated.
+
+```{r}
+fgcz_meta %>%
+  ggplot(aes(x = pmDelay, y = RIN, shape = Condition, color = Source)) +
+  scale_x_log10() +
+  labs(
+    x = "Post-mortem delay (hours)",
+    y = "RIN",
+    color = "Sample source",
+    shape = "Condition"
+  ) +
+  geom_point(size = 5, alpha = 0.8) +
+  scale_color_brewer(palette = "Set1")
+```
+
+
+```{r}
+fgcz_meta %>%
+  arrange(pmDelay) %>%
+  mutate(cdf_als = cumsum(Condition == "ALS")) %>%
+  ggplot(aes(x = (1:length(pmDelay)), y = cdf_als)) +
+  geom_line()
+```
 
 
 ## Deconvolution
