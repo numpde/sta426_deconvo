@@ -102,7 +102,7 @@ is a barebones Python implementation
 of cell type proportion reconstruction
 using non-negative least squares.
 Links: 
-[code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
+[code](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis).
 
 - **RNA-Sieve** (Python/Mathematica)
 incorporates 
@@ -133,11 +133,17 @@ Links:
 [manual](https://bitbucket.org/yuanlab/dwls/src/master/manual.pdf).
 
 
-This script:
-[Source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco),
-  [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output).
+We were unable to run 
+[SCDC](https://meichendong.github.io/SCDC/articles/SCDC.html).
 
 
+Finally,
+
+- [source code](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco)
+
+- [output folder](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201226-AllDeco/output)
+
+of this script.
 
 
 ## Preliminaries {.tabset .tabset-fade .tabset-pills}
@@ -146,15 +152,24 @@ This script:
 
 ```{r setup, include=TRUE}
 suppressPackageStartupMessages({
-  requireNamespace("magrittr")
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # install.packages("dplyr")
   library(dplyr)
+  # install.packages("ggplot2")
   library(ggplot2)
 
+  # install.packages("pheatmap")
   requireNamespace("pheatmap")
+  # install.packages("stringr")
   requireNamespace("stringr")
+  # install.packages("reshape2")
   requireNamespace("reshape2")
-  requireNamespace("purrr")
+  # install.packages("pbapply")
   requireNamespace("pbapply")
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
 
   # avoid importing `exprs` that leads to clashes
   requireNamespace("rlang")
@@ -163,35 +178,34 @@ suppressPackageStartupMessages({
   # install.packages("vroom")
   requireNamespace("vroom")
 
-  # install.packages("pathlibr")
-  requireNamespace("pathlibr")
-
   # Provides `ExpressionSet` data structure
+  # install.packages("BiocManager")
   # BiocManager::install("Biobase")
   requireNamespace("Biobase")
 
-  # Deconvolution package
+  #
+  # Deconvolution packages follow
+  #
+
   # install.packages("BisqueRNA")
   requireNamespace("BisqueRNA")
 
-  # According to https://github.com/meichendong/SCDC :
-  # install.packages("remotes")
-  # remotes::install_github("renozao/xbioc")
+  # remotes::install_github("renozao/xbioc@1354168")
   requireNamespace("xbioc") # For MuSiC and such
 
   # https://xuranw.github.io/MuSiC/articles/MuSiC.html
-  # install.packages("devtools")
-  # devtools::install_github("xuranw/MuSiC")
+  # remotes::install_github("xuranw/MuSiC@01e51ba")
   requireNamespace("MuSiC")
 
+  # We need to expose some functions from those packages for DWLS:
+  # BiocManager::install("ROCR")
   # BiocManager::install("MAST")
-  # remotes::install_bitbucket("yuanlab/dwls")
   requireNamespace("ROCR")
   requireNamespace("MAST")
-  requireNamespace("DWLS")
 
-  # install.packages("kableExtra")
-  requireNamespace("kableExtra")
+  # If installed afresh, this takes ages and then some:
+  # remotes::install_bitbucket("yuanlab/dwls@f13dcf9")
+  requireNamespace("DWLS")
 })
 ```
 
@@ -394,7 +408,7 @@ fgcz_data <-
   # Collapse ENSG IDs by gene_name:
   group_by_and_sum("gene_name")
 
-fgcz_meta <- 
+fgcz_meta <-
   from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```
 
@@ -621,25 +635,8 @@ that sum to one:
 stopifnot(max(abs(1 - colSums(bisque_report$bulk.props))) <= 1e-10)
 ```
 
-We undo that using the residual.
-The meaning of `rnorm` is not clear
-from the
-[manual](https://cran.r-project.org/web/packages/BisqueRNA/BisqueRNA.pdf),
-so this might be incorrect:
-
 ```{r}
-explained_fractions <-
-  bisque_report %>% {
-    1 - (sqrt((.)$rnorm) / sqrt(colSums(fgcz_data[(.)$genes.used, ]**2)))
-  }
-```
-
-Rescale proportions to 
-the "explained fractions".
-
-```{r}
-fgcz_darm_bisque <-
-  t(t(bisque_report$bulk.props) * explained_fractions)
+fgcz_darm_bisque <- bisque_report$bulk.props
 ```
 
 Cluster bulk samples by composition.
@@ -661,36 +658,42 @@ by bulk sample.
 ```{r}
 save_heat_bars_data <-
   function(., prefix = deparse(substitute(.))) {
-    df <- (.)[order(tolower(rownames(.))), samples_order]
-    as <- (function(ext) paste(prefix, ext, sep = "_"))
-    fn <- data.frame(
-      data_file = as("data.csv"),
-      heat_file = as("heat.png"),
-      bars_file = as("bars.png"),
-      path = out_file("")
-    )
+    sorted.df <- (.)[order(tolower(rownames(.))), samples_order]
+
+    filenames <-
+      (function(ext) paste(prefix, ext, sep = "_")) %>% {
+        list(
+          data = (.)("data.csv"),
+          heat = (.)("heat.png"),
+          bars = (.)("bars.png"),
+          path = out_file("")
+        )
+      }
+
+    # Attach the clinical Condition to sample IDs
+    sorted.df.tagged <-
+      sorted.df %>%
+      t() %>%
+      as.data.frame() %>%
+      ind2col("Name") %>%
+      mutate(suffix = if_else(fgcz_meta[Name, "Condition"] == "ALS", " (ALS)", "")) %>%
+      mutate(Name = paste0(Name, suffix)) %>%
+      select(-suffix) %>%
+      by_col1() %>%
+      t()
+
+    # Now plot as heatmap and as barplot
+    sorted.df.tagged %>%
+      save_heatmap(filenames$heat) %>%
+      save_barplot(filenames$bars)
 
     # Save table to disk
-    df %>%
+    sorted.df %>%
       as.data.frame() %>%
       ind2col("celltype") %>%
-      to_csv(fn$data)
-    
-    # Now plot as heatmap and as barplot
-    df %>%
-      # First attach the clinical Condition to sample IDs
-      t() %>%
-      as.data.frame() %>%
-      ind2col("ID") %>%
-      mutate(ID = if_else(fgcz_meta[ID, "Condition"] == "ALS", paste(ID, "(ALS)"), ID)) %>%
-      by_col1() %>%
-      t() %>%
-      # Now plot and save
-      save_heatmap(fn$heat) %>%
-      save_barplot(fn$bars)
-    
-    # Keep the file names
-    return(fn)
+      to_csv(filenames$data)
+
+    return(filenames)
   }
 ```
 
@@ -990,21 +993,11 @@ PD:
 
 
 
-```{r, eval=FALSE, echo=FALSE}
-# Permutation tests
-
-# install.packages("exactRankTests")
-requireNamespace("exactRankTests")
-
-# install.packages("DAAG")
-requireNamespace("DAAG")
-```
-
 
 #### Baseline NNLS
 
-For the code see 
-[here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis/a_deconvolution0.py).
+For the code and additional analysis see 
+[here](https://github.com/numpde/sta426_deconvo/blob/main/code/sandbox_ra/20201206-NNLS_Darmanis).
 
 ```{r}
 fgcz_darm_nnls <-
@@ -1041,7 +1034,7 @@ separated by sample source.
 similarity_plot <- function(X1, X2) {
   X1 <- X1[order(rownames(X1)), order(colnames(X1))]
   X2 <- X2[order(rownames(X2)), order(colnames(X2))]
-  
+
   # Check that samples are arranged consistently
   stopifnot(all(colnames(X1) == colnames(X2)))
   stopifnot(all(rownames(X1) == rownames(X2)))
@@ -1112,7 +1105,7 @@ similarity_plot(fgcz_darm_music, fgcz_darm_sieve) +
 
 #### DWLS
 
-This preprocesses the reference dataset.
+Preprocesses the reference dataset.
 
 ```{r, cache=TRUE, results='hide', message=FALSE}
 # This takes some 20min
@@ -1129,7 +1122,7 @@ dwls_darm_signature <-
   )
 ```
 
-This applies deconvolution
+Apply DWLS deconvolution
 to each bulk sample.
 
 ```{r, cache=TRUE}
@@ -1154,9 +1147,10 @@ fgcz_darm_dwls <-
 ```
 
 ```{r}
-fgcz_darm_dwls  <- 
-  fgcz_darm_dwls %>%
-  {fgcz_darm_dwls[order(tolower(rownames(.))), ]}
+fgcz_darm_dwls <-
+  fgcz_darm_dwls %>% {
+    fgcz_darm_dwls[order(tolower(rownames(.))), ]
+  }
 ```
 
 ```{r}
@@ -1291,7 +1285,7 @@ fgcz_abm1_music %>%
 
 R Andreev, 
 Cell type deconvolution 
-from bulk RNA-seq of the human brain,
+from bulk RNA-seq of the human prefrontal cortex,
 `r format(Sys.time(), '%Y-%m-%d')`,
 [http://bit.ly/deco_ra](http://bit.ly/deco_ra).
 
