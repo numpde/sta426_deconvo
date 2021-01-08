@@ -545,13 +545,16 @@ stopifnot(117 == length(abm1_markergenes))
 ```
 
 
-## Exploratory 
+## Exploratory {.tabset .tabset-fade .tabset-pills}
 
-### FGCZ bulk RNA-seq {.tabset .tabset-fade .tabset-pills}
+### Initial
 
-Some exploratory cross-sections of the dataset
+Some cross-sections of 
+the bulk dataset
 can be found
 [here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201130-FirstLook).
+
+### More
 
 Of particular interest for the following 
 are 
@@ -574,13 +577,41 @@ fgcz_meta %>%
   scale_color_brewer(palette = "Set1")
 ```
 
+When we order the samples
+by post-mortem delay or RIN,
+we can see short
+runs of samples
+where the condition ALS/Control does not change.
+Thus if we introduce a quality cut-off
+(e.g. low RIN),
+we should take care not to bias
+the number of ALS/Control samples.
+For example,
+dropping 14 samples of lowest RIN could be a good choice.
 
 ```{r}
 fgcz_meta %>%
-  arrange(pmDelay) %>%
-  mutate(cdf_als = cumsum(Condition == "ALS")) %>%
-  ggplot(aes(x = (1:length(pmDelay)), y = cdf_als)) +
-  geom_line()
+  {
+    lapply(
+      c("RIN", "pmDelay"),
+      function(field) {
+        (.) %>%
+          mutate(value = !!rlang::sym(field)) %>%
+          arrange(value) %>%
+          mutate(rank = (1:nrow(.))) %>%
+          mutate(cdf_als = cumsum(Condition == "ALS") - (rank / 2)) %>%
+          mutate(ranked_by = field) %>%
+          mutate(median_value = median(value))
+      }
+    )
+  } %>%
+  bind_rows() %>%
+  ggplot(aes(x = rank, y = cdf_als, shape = Condition, color = Source)) +
+  labs(x = "Sample number", y = "(Cumulative number of ALS cases) - Expected") +
+  facet_wrap(~ranked_by, nrow = 1) +
+  geom_point(size = 2, alpha = 0.7) +
+  scale_color_brewer(palette = "Set1") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10))
 ```
 
 
@@ -1019,6 +1050,51 @@ Ox:
 PD:
 ![](`r out_file("fgcz_darm_music_PD_bars.png")`)
 
+
+Let's have a look again at the quality metrics,
+this time annotated by 
+the estimated fraction of astrocytes.
+
+```{r}
+fgcz_darm_music %>%
+  t() %>%
+  as.data.frame() %>%
+  assert_fgcz_meta_order() %>%
+  cbind(fgcz_meta) %>%
+  ggplot(aes(x = pmDelay, y = RIN, shape = Condition, color = Source, alpha = 100 * astrocytes)) +
+  scale_x_log10() +
+  labs(
+    x = "Post-mortem delay (hours)",
+    y = "RIN",
+    color = "Sample source",
+    shape = "Condition",
+    alpha = "Astrocytes, %"
+  ) +
+  geom_point(size = 5) +
+  scale_color_brewer(palette = "Set1")
+```
+
+A trend
+towards a higher content of (intact) astrocytes
+at lower RIN
+is now visible:
+
+```{r}
+fgcz_darm_music %>%
+  t() %>%
+  as.data.frame() %>%
+  assert_fgcz_meta_order() %>%
+  cbind(fgcz_meta) %>%
+  ggplot(aes(x = RIN, y = 100 * astrocytes, shape = Condition, color = Source)) +
+  scale_x_log10() +
+  labs(
+    y = "Estimated astrocyte content, %",
+    color = "Sample source",
+    shape = "Condition"
+  ) +
+  geom_point(size = 5, alpha = 0.8) +
+  scale_color_brewer(palette = "Set1")
+```
 
 
 
