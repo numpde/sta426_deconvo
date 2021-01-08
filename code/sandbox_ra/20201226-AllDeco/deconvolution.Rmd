@@ -54,16 +54,17 @@ the technical noise
 of bulk versus single-cell RNA-seq.
 
 As cell type reference datasets we resort to
-the single-cell RNA-seq
-dataset
+
+- the single-cell RNA-seq dataset
 [Darmanis et al](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2015-Darmanis)
 (~300 labeled cells used)
-and,
-with even lesser success,
-the
-single-nucleus RNA-seq dataset
+
+and
+
+- to the single-nucleus RNA-seq dataset
 [Allen Brain M1](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
 (>70k labeled cells).
+
 The two are compared 
 [here](https://github.com/numpde/sta426_deconvo/tree/main/code/sandbox_ra/20201220-Darmanis_vs_Allen).
 
@@ -197,6 +198,10 @@ suppressPackageStartupMessages({
 
 ### Session info
 
+```{r}
+
+```
+
 ```{r, echo=FALSE}
 sessionInfo()
 ```
@@ -314,7 +319,7 @@ hist_theme <-
 ```
 
 ```{r}
-save_barchart <-
+save_barplot <-
   function(., filename) {
     as.data.frame(.) %>%
       ind2col("celltype") %>%
@@ -380,6 +385,7 @@ save_heatmap <-
 
 ### Bulk expression: FGCZ
 
+
 ```{r, cache=TRUE}
 fgcz_data <-
   path_to("data/20201128-FGCZ/*count.zip") %>%
@@ -388,7 +394,8 @@ fgcz_data <-
   # Collapse ENSG IDs by gene_name:
   group_by_and_sum("gene_name")
 
-fgcz_meta <- from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
+fgcz_meta <- 
+  from_csv(path_to("data/20201128-FGCZ/*infos.tsv"))
 ```
 
 This will be used later.
@@ -406,6 +413,7 @@ t(fgcz_data) %>%
   assert_fgcz_meta_order() %>%
   hush()
 ```
+
 
 ### Ref scRNA: Darmanis
 
@@ -511,9 +519,7 @@ data.frame(
 
 These marker genes 
 [were extracted](https://github.com/numpde/sta426_deconvo/tree/main/data/20201206-RefDatasets/2019-AllenBrain-M1)
-from the
-[Allen Brain M1](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)
-scRNA dataset.
+from the Allen Brain M1 dataset.
 Technically, these should be the same as 
 in `abm1_data` before filtering.
 Just in case, we subset them the maximal common subset.
@@ -545,11 +551,15 @@ In this section we use
 **Darmanis et al**
 as the reference dataset.
 
+Please select one of the methods:
+
 #### Bisque {#fgcz_darm_bisque}
 
-Repackage the data
+First, repackage the data
+as ExpressionSet
 following the 
 [Bisque vignette](https://cran.r-project.org/web/packages/BisqueRNA/vignettes/bisque.html).
+This will also be used in other methods.
 
 ```{r}
 fgcz_eset <- Biobase::ExpressionSet(
@@ -651,16 +661,36 @@ by bulk sample.
 ```{r}
 save_heat_bars_data <-
   function(., prefix = deparse(substitute(.))) {
+    df <- (.)[order(tolower(rownames(.))), samples_order]
     as <- (function(ext) paste(prefix, ext, sep = "_"))
+    fn <- data.frame(
+      data_file = as("data.csv"),
+      heat_file = as("heat.png"),
+      bars_file = as("bars.png"),
+      path = out_file("")
+    )
 
-    (.)[order(tolower(rownames(.))), samples_order] %>%
-      #
-      save_heatmap(as("heat.png")) %>%
-      save_barchart(as("bars.png")) %>%
-      #
+    # Save table to disk
+    df %>%
       as.data.frame() %>%
       ind2col("celltype") %>%
-      to_csv(as("data.csv"))
+      to_csv(fn$data)
+    
+    # Now plot as heatmap and as barplot
+    df %>%
+      # First attach the clinical Condition to sample IDs
+      t() %>%
+      as.data.frame() %>%
+      ind2col("ID") %>%
+      mutate(ID = if_else(fgcz_meta[ID, "Condition"] == "ALS", paste(ID, "(ALS)"), ID)) %>%
+      by_col1() %>%
+      t() %>%
+      # Now plot and save
+      save_heatmap(fn$heat) %>%
+      save_barplot(fn$bars)
+    
+    # Keep the file names
+    return(fn)
   }
 ```
 
@@ -941,7 +971,7 @@ fgcz_darm_music %>%
     (.x) %>%
       tibble::column_to_rownames("ID") %>%
       t() %>%
-      save_barchart(paste("fgcz_darm_music_", pull(.y), "_bars.png", sep = ""))
+      save_barplot(paste("fgcz_darm_music_", pull(.y), "_bars.png", sep = ""))
   }) %>%
   hush()
 ```
@@ -1259,7 +1289,7 @@ fgcz_abm1_music %>%
 
 ## Cite as
 
-RA, 
+R Andreev, 
 Cell type deconvolution 
 from bulk RNA-seq of the human brain,
 `r format(Sys.time(), '%Y-%m-%d')`,
