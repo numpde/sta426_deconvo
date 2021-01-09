@@ -16,9 +16,7 @@ editor_options:
 We investigate
 a dataset of 102 bulk [RNA-seq](https://en.wikipedia.org/wiki/RNA-Seq) samples
 extracted from the prefrontal cortex
-of 102 deceased individuals.
-The dataset is provided by 
-H Rehrauer of FGCZ
+of 102 deceased individuals
 ([details](https://github.com/numpde/sta426_deconvo/tree/main/data/20201128-FGCZ)).
 Roughly half of the samples are
 from patients diagnosed with 
@@ -565,15 +563,16 @@ but appear to be uncorrelated.
 
 ```{r}
 fgcz_meta %>%
-  ggplot(aes(x = pmDelay, y = RIN, shape = Condition, color = Source)) +
+  ggplot(aes(x = pmDelay, y = RIN, shape = Condition, color = Source, size = LibConc_100_800bp)) +
   scale_x_log10() +
   labs(
     x = "Post-mortem delay (hours)",
     y = "RIN",
     color = "Sample source",
-    shape = "Condition"
+    shape = "Condition",
+    size = "Lib. conc. (a.u.)"
   ) +
-  geom_point(size = 5, alpha = 0.8) +
+  geom_point(alpha = 0.8) +
   scale_color_brewer(palette = "Set1")
 ```
 
@@ -1096,6 +1095,59 @@ fgcz_darm_music %>%
   scale_color_brewer(palette = "Set1")
 ```
 
+Notably,
+among **Lo** samples,
+samples with lower RIN are predominantly 
+from the control group.
+Let's have a second look at
+the p-values, now
+as a function of RIN cut-off
+(we drop $n$ samples with lowest RIN from each Source).
+
+```{r}
+fgcz_darm_music.pca %>%
+  filter(Source != "PD") %>%
+  group_by(Source) %>%
+  group_map(~ {
+    lapply(
+      0:10,
+      function(ndrop) {
+        (.x) %>%
+          arrange(RIN) %>%
+          {
+            (.)[(1 + ndrop):nrow(.), ]
+          } %>%
+          {
+            t.test(
+              x = filter((.), Condition == "ALS")$PC1,
+              y = filter((.), Condition != "ALS")$PC1,
+              alternative = "two"
+            ) %>% {
+              list(
+                `Sample source` = dplyr::pull((.y)),
+                `p-value` = round((.)$p.value, 3),
+                `t-statistic` = round((.)$statistic, 2),
+                `#dof` = round((.)$parameter, 1),
+                `Drop` = ndrop
+              )
+            }
+          }
+      }
+    ) %>%
+      data.table::rbindlist()
+  }) %>%
+  data.table::rbindlist() %>%
+  ggplot(aes(x = Drop, y = `p-value`, color = `Sample source`)) +
+  labs(x = "Number of lowest-RIN samples to drop (from each Source)") +
+  geom_point(size = 3) +
+  geom_line(linetype = "dashed") +
+  scale_x_continuous(breaks = 0:10) +
+  scale_y_log10(
+    breaks = c(0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1),
+    labels = c("1%", "2%", "5%", "10%", "20%", "50%", "100%")
+  )
+```
+
 
 
 #### Baseline NNLS
@@ -1377,12 +1429,65 @@ fgcz_abm1_music %>%
 
 ## Discussion
 
-(**in progress**)
+While many deconvolution tools have been developed, 
+it appears a priori
+entirely unclear 
+which one/s will give 
+the most reliable results. 
+We have restricted ourselves to a few tools
+that estimate cell type proportions
+in the bulk sample
+from a reference single-cell dataset.
+There are several sources of uncertainty 
+that should be taken into account,
+including
+technical and biological variability of the bulk sample,
+technical noise of the reference dataset,
+difference in sequencing platforms,
+and composition of the reference dataset.
+Yet,
+perhaps the weakest point of the present mini-study
+is insufficient *coverage*:
+the reference dataset does not necessarily
+cover the aberrant cell states that may
+appear in ALS,
+and not all tools acknowledge
+the possibility.
+We have focused on the results from MuSiC 
+(with **Darmanis** as reference dataset)
+as they seemed more reasonable
+and more consistent with two other methods.
+However, 
+MuSiC inferred a higher proportion of neurons
+in ALS patients vs Control
+for a subset of samples,
+which is unexpected
+for a neurodegenerative disease
+(unless the brain attempts to compensate for lack in functionality). 
 
 
 ## Acknowledgements
 
-(**in progress**)
+This is a project under the aegis 
+of the course
+[STA426](https://www.math.uzh.ch/index.php?id=1402&key1=0&key2=3968&key3=352&semId=41)/[CBB](https://cbb.ethz.ch/).
+Many thanks to:
+
+- [K Dobler](https://github.com/KalvinDobler)
+for contributions to 
+the [project sketch](https://bit.ly/sta426_deconvo_sketch),
+
+- [PL Germain](https://schrattlab.ethz.ch/the-group/people/person-detail.MjUwODk0.TGlzdC8yOTEzLDExMTE5MzUxNzY=.html) (and mystery colleague)
+for useful pointers and comments,
+
+- [B Jew](https://brandonjew.com/)
+for clarifications on Bisque,
+
+- [S Lewandowski](https://staff.ki.se/people/seblew)
+for an in-depth discussion and suggestions,
+
+- [H Rehrauer](https://fgcz.ch/the-center/people/rehrauer.html) 
+for the dataset and helpful comments.
 
 
 ## Cite as
