@@ -12,7 +12,9 @@ Direct links:
 	https://sta426hs2020.slack.com/files/U01AL6209B6/F01FPSJMKT5/prefrontalcortex_infos.tsv
 	
 The dataset contains 
-	"102 samples from human brain tissue that have varying composition of neurons".
+	102 samples from human brain tissue that have varying composition of neurons
+	Sequenced together on Illumina, prepared with "Pico Mammalian" (v2)
+
 
 RA, 2020-Nov-28
 
